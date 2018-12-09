@@ -1,0 +1,31 @@
+﻿生成启动时间为 2018/12/9 20:22:36。
+     1>项目“C:\Users\Administrator\Desktop\project1\project-1\客户端\client\client\client.vcxproj”在节点 2 上(Build 个目标)。
+     1>ClCompile:
+         D:\VS2013\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /sdl /Od /Oy- /D _MBCS /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc120.pdb" /Gd /TP /analyze- /errorReport:prompt ClientOperation.cpp ItcastLog.cpp main.cpp RespondCodec.cpp RespondFactory.cpp SecKeyShm.cpp ShareMemory.cpp TcpServer.cpp TcpSocket.cpp
+         TcpSocket.cpp
+     1>c:\users\administrator\desktop\project1\project-1\客户端\client\client\tcpsocket.cpp(2): fatal error C1083: 无法打开包括文件: “unistd.h”: No such file or directory
+         TcpServer.cpp
+     1>c:\users\administrator\desktop\project1\project-1\客户端\client\client\tcpserver.h(2): fatal error C1083: 无法打开包括文件: “netinet/in.h”: No such file or directory
+         ShareMemory.cpp
+     1>c:\users\administrator\desktop\project1\project-1\客户端\client\client\sharememory.cpp(1): fatal error C1083: 无法打开包括文件: “sys/ipc.h”: No such file or directory
+         SecKeyShm.cpp
+     1>c:\users\administrator\desktop\project1\project-1\客户端\client\client\sharememory.h(2): fatal error C1083: 无法打开包括文件: “sys/ipc.h”: No such file or directory
+         RespondFactory.cpp
+     1>c:\users\administrator\desktop\project1\project-1\客户端\client\client\respondcodec.h(16): error C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 d:\vs2013\vc\include\string.h(112) : 参见“strcpy”的声明
+         RespondCodec.cpp
+     1>c:\users\administrator\desktop\project1\project-1\客户端\client\client\respondcodec.h(16): error C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 d:\vs2013\vc\include\string.h(112) : 参见“strcpy”的声明
+         main.cpp
+     1>c:\users\administrator\desktop\project1\project-1\客户端\client\client\sharememory.h(2): fatal error C1083: 无法打开包括文件: “sys/ipc.h”: No such file or directory
+         ItcastLog.cpp
+     1>c:\users\administrator\desktop\project1\project-1\客户端\client\client\itcastlog.cpp(34): error C4996: 'localtime': This function or variable may be unsafe. Consider using localtime_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 d:\vs2013\vc\include\time.inl(112) : 参见“localtime”的声明
+         ClientOperation.cpp
+     1>c:\users\administrator\desktop\project1\project-1\客户端\client\client\sharememory.h(2): fatal error C1083: 无法打开包括文件: “sys/ipc.h”: No such file or directory
+         正在生成代码...
+     1>已完成生成项目“C:\Users\Administrator\Desktop\project1\project-1\客户端\client\client\client.vcxproj”(Build 个目标)的操作 - 失败。
+
+生成失败。
+
+已用时间 00:00:01.33
