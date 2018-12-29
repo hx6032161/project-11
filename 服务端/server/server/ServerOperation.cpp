@@ -56,24 +56,42 @@ void ServerOperation::startWork()
 		m_listSocket.insert(make_pair(threadID, m_client));
 	}
 }
-int ServerOperation::secKeyAgree()
+int ServerOperation::secKeyAgree(RequestMsg* reqmsg, char** outData, int& outLen)
 {
-	//验证消息认证码 判断消息是否被篡改
-
+	RespondMsg resMsg;
 	//生成随机字符串r2
-
+	getRandString(sizeof(resMsg.r2), resMsg.r2);
 	//将随机字符串r2和r1进行拼接， 然后生成秘钥
-
+	char key[1024] = { 0 };
+	unsigned char mdSha[SHA_DIGEST_LENGTH];
+	sprintf(key, "%s%s", reqmsg->r1, resMsg.r2);
+	SHA1((unsigned char*)key, strlen(key), (unsigned char*)mdSha);
+	for (int i = 0; i < SHA_DIGEST_LENGTH; ++i)
+	{
+		sprintf(&key[i * 2], "%02x", mdSha[i]);
+	}
+	cout << "服务器端生成的秘钥: " << key << endl;
 	//获取秘钥ID(从数据库中获取)
-
+	resMsg.seckeyid = m_occi.getKeyID();	
+	resMsg.rv = 0;	// 0: 成功, -1: 失败
+	strcpy(resMsg.clientId, reqmsg->clientId);
+	strcpy(resMsg.serverId, m_info.serverID);
 	//将要发送给客户端的应答结构体进行编码
-
-	//发送数据给客户端
-
+	//发送数据给客户端，传出参数赋值
+	CodecFactory* factory = new RespondFactory(&resMsg);
+	Codec* codec = factory->createCodec();
+	codec->msgEncode(outData, outLen);
 	//写入秘钥信息到共享内存
-
+	NodeSHMInfo shmInfo;
+	shmInfo.status = 1;
+	shmInfo.seckeyID = resMsg.seckeyid;	// 从数据中读出的
+	strcpy(shmInfo.clientID, reqmsg->clientId);
+	strcpy(shmInfo.seckey, key);
+	strcpy(shmInfo.serverID, m_info.serverID);
+	m_shm->shmWrite(&shmInfo);
 	//关闭连接
 
+	return 0;
 }
 // 友元函数, 可以在该友元函数中通过对应的类对象调用期私有成员函数或者私有变量
 // 子线程 - 进行业务流程处理
@@ -93,7 +111,9 @@ void * working(void * arg)
 	CodecFactory* factory = new RequestFactory();
 	Codec* codec = factory->createCodec();
 	RequestMsg * reqMsg = (RequestMsg*)codec->msgDecode(recvData, recvLen);
-	//判断clientID是否合法,生成新的消息验证码key
+	//判断clientID是否合法
+	
+	//生成新的消息验证码key
 	char key[1024] = { 0 };
 	unsigned int mdLen = -1;
 	unsigned char mdHmac[SHA256_DIGEST_LENGTH];

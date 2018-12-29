@@ -2,6 +2,7 @@
 #include"SecKeyShm.h"
 #include "TcpServer.h"
 #include <map>
+#include "RequestCodec.h"
 class ServerInfo
 {
 public:

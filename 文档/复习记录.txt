@@ -1,0 +1,107 @@
+ 1.1 逗号表达式
+	c语言提供一种特殊的运算符，逗号运算符，优先级别最低，它将两个及其以上的式子联接起来，从左往右逐个计算表达式，整个表达式的值为最后一个表达式的值。	
+1.2 通配符
+	%f和%lf分别是float类型和double类型用于格式化输入输出时对应的格式符号。
+	%*2d表示跳过两位
+	***********scanf中的%ld前面的值会变成0
+	%-md 表示不足m位向前补空格
+1.3 运算符
+	x *= 3 + 2   等同于 x = x * （3 + 2）
+	%只能用于整形运算
+	&&优先级高与||，计算机遇到||后先算左边的，如果为真，则不再运算后面的（短路求值）
+1.4 ASCII码
+	48-0 65-A 97-a
+1.5 linux常用命令
+	外网ip查询 curl ifconfig.me
+	移动光标
+		Ctrl – a ：移到行首
+		Ctrl – e ：移到行尾
+	查看端口占用netstat -tunlp |grep 端口号，用于查看指定的端口号的进程情况，如查看8000端口的情况，netstat -tunlp |grep 8000
+		lsof -i:端口号 用于查看某一端口的占用情况，比如查看8000端口使用情况，lsof -i:8000
+	设置别名 查看别名 alias  修改 家目录/.bashrc
+	:w !sudo tee %  vim保存只读文件
+	du -sh 查看当前目录大小
+	top -M以mb方式显示（新版本top里按下E，可以切换单位）
+	cat /etc/issue，此命令也适用于所有的Linux发行版。
+	cat /etc/redhat-release 这种方法只适合Redhat系的Linux：
+
+	查看文件字符编码
+	file -i /opt/test.log	
+	转换gbk编码文件为utf-8编码文件
+	简洁命令：iconv  -f gbk -t utf-8 index.html > aautf8.html
+	其中-f指的是原始文件编码，-t是输出编码  index.html 是原始文件   aautf8.html是输出结果文件
+	
+	alias别名在~/.bashrc中配置
+
+	shell中操作字符串
+	从左向右截取最后一个string后的字符串
+	${varible##*string}
+	从左向右截取第一个string后的字符串
+	${varible#*string}
+	从右向左截取最后一个string后的字符串
+	${varible%%string*}
+	从右向左截取第一个string后的字符串
+	${varible%string*}
+	“*”只是一个通配符可以不要
+
+	 new=`echo $1|sed -r 's/abc(.*$)/\1/g'`
+	sed命令支持正则表达式，我们将文件名作为sed命令的输入处理，'s/^/abc/g'是替换命令，s是替换处理，格式为s/old/new/g，^表示匹配字符串的开始，这个命令的效果就是在字符串开头插入abc
+
+	解压
+	.tar.bz2
+	解压：tar jxvf FileName.tar.bz2
+	压缩：tar jcvf FileName.tar.bz2 DirName	
+	.tar.gz 和 .tgz
+	解压：tar zxvf FileName.tar.gz
+	压缩：tar zcvf FileName.tar.gz DirName
+
+
+	screen：
+	screen -S mc 创建名为mc的screen
+	screen -r mc 恢复名为mc的screen
+	screen -ls 显示所有的screen
+	ctrl+a+d 回到之前的命令行
+	杀死screenscreen -S session_name -X quit
+	搜索：
+	whereis 文件名 搜寻特定目录
+	locate 文件名 搜寻数据库 (updatedb更新数据库）
+	
+	rpm安装：
+	1 #rpm -i example.rpm 安装 example.rpm 包；
+	2 #rpm -iv example.rpm 安装 example.rpm 包并在安装过程中显示正在安装的文件信息；
+	3 #rpm -ivh example.rpm 安装 example.rpm 包并在安装过程中显示正在安装的文件信息及安装进度
+
+	4 #rpm -ivh --test gaim-1.3.0-1.fc4.i386.rpm　　　 //用来检查依赖关系；并不是真正的安装
+	5 #rpm -qpR file.rpm　　　　　　　＃[查看包]依赖关系
+	
+	rpm包安装的，可以用rpm -qa看到，如果要查找某软件包是否安装，用 rpm -qa | grep “软件或者包的名字”。
+
+	yum安装：
+	yum install -y 包名 自动同意安装
+	yum list 包名 查询可以安装的包
+	yum provides/yum whatprovides  来定位需要的rpm包
+	yum list installed 列出所有已安装的软件包
+	yum search  使用YUM查找软件包   
+	
+	yum info 包名 查看程序包的信息
+
+1.6 math.h
+	开根号  sqrt（）
+
+1.7 算法	
+	最坏情况：以大O记号形式表示的时间复杂度，给出了一个算法的最坏情况，即--对于规模为n的任意输入，算法的运行时间都不会超过O(f(n))
+	最好情况 ：大 Ω记号-->如果存在正的常数c和函数g(n)，对任意n>>2，有T(n) > c * g(n)，即认为：在n足够 大后，g(n)给出了T(n)的一个下界，记为：
+T(n) =Ω (g(n))
+	大 Θ记号-->存在正的常数c1和c2，以及函数h(n)，对任意n>>2，有 c1*h(n) < T(n) < c2 * h(n)，即认为：在n足够大后，h(n)给出了T(n)的一个确界
+
+	分冶算法
+	贪心算法 每一步都使用最优解。   往往贪心算法之前要先进性排序
+	动态规划 先计算子问题，再由子问题计算父问题（https://blog.csdn.net/u013309870/article/details/75193592）
+1.8 VS快捷键
+	在源文件与头文件之间切换的快捷键它是Ctrl+K,Ctrl+O
+2.1 项目一
+	1.8.1进程间通信 pipe（匿名管道） mmap（共享文件） 信号 本地socket通信 
+	项目使用共享内存完成进程间通信：1创建共享内存 2连接共享内存 3断开连接 4删除共享内存
+	查询共享内存 ipcs -m
+	查询所有进程间通信 ipcs -a
+	删除通信 ipcrm -m + shmid

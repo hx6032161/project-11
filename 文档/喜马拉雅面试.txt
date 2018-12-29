@@ -1,0 +1,57 @@
+1.list 和 vector 的区别：
+1.vector数据结构
+vector和数组类似，拥有一段连续的内存空间，并且起始地址不变。
+因此能高效的进行随机存取，时间复杂度为o(1);
+但因为内存空间是连续的，所以在进行插入和删除操作时，会造成内存块的拷贝，时间复杂度为o(n)。
+另外，当数组中内存空间不够时，会重新申请一块内存空间并进行内存拷贝。
+
+2.list数据结构
+list是由双向链表实现的，因此内存空间是不连续的。
+只能通过指针访问数据，所以list的随机存取非常没有效率，时间复杂度为o(n);
+但由于链表的特点，能高效地进行插入和删除。
+
+使用区别：
+     1 如果你需要高效的随即存取，而不在乎插入和删除的效率，使用vector 
+     2 如果你需要大量的插入和删除，而不关心随即存取，则应使用list 
+     3 如果你需要随即存取，而且关心两端数据的插入和删除，则应使用deque
+
+
+II、map & multimap & unordered_map & unordered_multimap
+2.1 map与multimap底层数据结构
+
+map与multimap是STL中的关联容器、提供一对一key-value的数据处理能力； map与multimap的区别在于，multimap允许关键字重复，而map不允许重复。
+
+这两个关联容器的底层数据结构均为红黑树，关于红黑树的理解可以参考教你透彻了解红黑树一文。
+
+根据红黑树的原理，map与multimap可以实现O(lgn)的查找，插入和删除。
+
+2.2 unordered_map 与unordered_multimap底层数据结构
+
+unordered_map与unordered_multimap 对比2.1中的两种map在于其2.1中的两个容器实现了以key为序排列，也就是说map与multimap为有序的。
+
+而unordered_map与unordered_multimap中key为无序排列，其底层实现为hash table，因此其查找时间复杂度理论上达到了O(n)，之所以说理论上是因为在理想无碰撞的情况下，而真实情况未必如此。
+
+III、set & multiset & unordered_set & unordered_multiset
+以上四种容器也都是关联容器，set系与map系的区别在于map中存储的是<key-value>，而set可以理解为关键字即值，即只保存关键字的容器。
+
+3.1 set & multiset底层数据结构
+
+set与multiset有序存储元素，这两种容器的底层实现与map一样都是红黑树，所以能实现O(lgn)的查找，插入，删除操作。
+
+set与multiset的区别在于是否允许重复；
+
+3.2 unordered_set & unordered_multiset
+
+与unordered_map & unordered_multimap相同，其底层实现为hash table；
+
+
+2.海量数据寻找top 堆排序
+
+3.sql索引
+https://www.cnblogs.com/selene/p/4474721.html
+
+主键本身就是一个聚集索引
+4.c++内存泄漏
+内存泄露的检测
+
+内存泄露的关键就是记录分配的内存和释放内存的操作，看看能不能匹配。跟踪每一块内存的声明周期，例如：每当申请一块内存后，把指向它的指针加入到List中，当释放时，再把对应的指针从List中删除，到程序最后检查List就可以知道有没有内存泄露了。Window平台下的Visual Studio调试器和C运行时（CRT）就是用这个原理来检测内存泄露。

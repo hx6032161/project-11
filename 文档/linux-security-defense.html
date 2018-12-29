@@ -1,0 +1,2546 @@
+<html>
+  <head>
+	  <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <title>i5ting_ztree_toc:linux-security-defense</title>
+		<link href="toc/style/github-bf51422f4bb36427d391e4b75a1daa083c2d840e.css" media="all" rel="stylesheet" type="text/css"/>
+		<link href="toc/style/github2-d731afd4f624c99a4b19ad69f3083cd6d02b81d5.css" media="all" rel="stylesheet" type="text/css"/>
+		<link href="toc/css/zTreeStyle/zTreeStyle.css" media="all" rel="stylesheet" type="text/css"/>
+	  <style>
+		pre {
+		    counter-reset: line-numbering;
+		    border: solid 1px #d9d9d9;
+		    border-radius: 0;
+		    background: #fff;
+		    padding: 0;
+		    line-height: 23px;
+		    margin-bottom: 30px;
+		    white-space: pre;
+		    overflow-x: auto;
+		    word-break: inherit;
+		    word-wrap: inherit;
+		}
+
+		pre a::before {
+		  content: counter(line-numbering);
+		  counter-increment: line-numbering;
+		  padding-right: 1em; /* space after numbers */
+		  width: 25px;
+		  text-align: right;
+		  opacity: 0.7;
+		  display: inline-block;
+		  color: #aaa;
+		  background: #eee;
+		  margin-right: 16px;
+		  padding: 2px 10px;
+		  font-size: 13px;
+		  -webkit-touch-callout: none;
+		  -webkit-user-select: none;
+		  -khtml-user-select: none;
+		  -moz-user-select: none;
+		  -ms-user-select: none;
+		  user-select: none;
+		}
+
+		pre a:first-of-type::before {
+		  padding-top: 10px;
+		}
+
+		pre a:last-of-type::before {
+		  padding-bottom: 10px;
+		}
+
+		pre a:only-of-type::before {
+		  padding: 10px;
+		}
+
+		.highlight { background-color: #ffffcc } /* RIGHT */
+		</style>
+  </head>
+  <body>
+	  <div>
+				<div style='width:25%;'>
+						<ul id="tree" class="ztree" style='width:100%'>
+
+						</ul>
+				</div>
+        <div id='readme' style='width:70%;margin-left:20%;'>
+          	<article class='markdown-body'>
+            	<h1 id="-">网络攻防课程概述</h1>
+<p>  网络攻防课程源于信息社会对信息安全的需求， 传智博客网络攻防课程设置初衷是规划一堂以攻防实践入门，以攻防原理的晋级学习的一门课程。</p>
+<ul>
+<li><p><strong>学什么</strong></p>
+<ul>
+<li>这个阶段的课程大致可分为三个部分：<ul>
+<li>安全防护， 4天</li>
+<li>渗透攻击， 4天</li>
+<li>企业中真实项目, 深度报文检测，9天 </li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>学完做什么</strong></p>
+<p>围绕&quot;安全&quot;这一关键词，衍生出类似:安全运维、安全售后、安全服务(合规核查、安全加固/增强)、渗透测试、Web安全、云安全、移动安全等多种职位需求。</p>
+</li>
+<li><p><strong>怎么学</strong></p>
+<p>网络攻防是一门实践性很强的学科，它需要储备的技术面很宽泛，对计算机系统、程序编译链接、网络协议等知识领域要有一定的了解。</p>
+</li>
+</ul>
+<!-- ** 关于作者 ** -->
+<!--    郭同彬， 昵称 Panda， 从事Linux下 内核开发多年，专注于内核安全以及系统安全、攻防技术的研究。 -->
+<hr>
+<h1 id="-">网络攻防环境</h1>
+<ul>
+<li><strong> 目标 </strong><ul>
+<li>了解攻防环境构成</li>
+<li>了解入侵检测系统（平台）的部署位置</li>
+</ul>
+</li>
+</ul>
+<h2 id="-">环境构成</h2>
+<h3 id="-">环境框图</h3>
+<blockquote>
+<p>一个基本的网络攻防实验环境包括：靶机、攻击机、入侵检测分析系统、网络连接四部分组成。</p>
+</blockquote>
+<p>一个基础的网络攻防实验环境需要如下组成部分：</p>
+<!-- 此处需要补充网络攻防环境拓扑图 -->
+<p><img src="images/01.02-attack-and-defence-env.png" alt="网络攻击环境示意图"></p>
+<h3 id="-">靶机</h3>
+<ul>
+<li>靶机：包含系统和应用程序漏洞，并作为攻击目标的主机，本次课程选用 metasploitable镜像<ul>
+<li><a href="https://sourceforge.net/projects/metasploitable/">Metasploitable 镜像下载地址</a></li>
+<li><img src="./images/01.01-metasploitalbe.png" alt="Mestasploitable镜像"></li>
+<li>相关镜像已经在服务器部署完成</li>
+</ul>
+</li>
+</ul>
+<h3 id="-">攻击机</h3>
+<ul>
+<li><p>攻击机： 用于发起网络攻击的主机，本次课程基于Kali Linux构建攻击机。</p>
+<ul>
+<li><a href="http://www.kali.org/downloads/">Kali Linux下载地址</a></li>
+<li>搞渗透测试的专用平台。 </li>
+<li>Kali Linux是基于Debian的Linux发行版，(和ubuntu是兄弟关系），设计用于数字取证操作系统。 </li>
+<li>集成超过300个渗透测试工具， 继承自BackTrack， 并发扬光大</li>
+<li>一般来说，“攻击”这个词杀气太重，习惯来讲，一般会说“渗透测试”。</li>
+</ul>
+</li>
+</ul>
+<h3 id="ids-ips">IDS/IPS</h3>
+<ul>
+<li>攻击检测、分析、与防御平台：<ul>
+<li>IDS: Intrusion Detection Systems, 入侵检测系统<ul>
+<li>IDS在交换式网络中的位置一般选择为:尽可能靠近攻击源、尽可能靠近受保护资源</li>
+<li>部署位置： Internet接入路由器之后的第一台交换机上</li>
+</ul>
+</li>
+<li>IPS: Intrusion Prevention System, 入侵防御系统<ul>
+<li>办公网与外部网络的连接部位(入口/出口)， 简单的说就是网关</li>
+<li>重要服务器集群前端;</li>
+<li>办公网内部接入层</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="-">网络链接</h3>
+<ul>
+<li>网络连接： 通过网络将靶机、攻击机和具备检测分析防御功能的网关进行连接。<ul>
+<li>交换机、网关等</li>
+</ul>
+</li>
+</ul>
+<h3 id="-">虚拟环境</h3>
+<ul>
+<li>虚拟环境： 本次课程靶机部分部署在服务器虚拟机上， 攻击机部署在学员的电脑虚拟机上，<ul>
+<li>虚拟化软件采用virtualbox。</li>
+</ul>
+</li>
+</ul>
+ <!-- ## 1.4 附录： Virtualbox 安装指南  ## -->
+<!-- 2. 关于SEED， 作为网络协议栈的攻防 -->
+<!-- - http://www.cis.syr.edu/~wedu/ -->
+<!-- - http://www.cis.syr.edu/~wedu/seed/ -->
+<!-- Metasploitable2使用指南  -->
+<h2 id="-">随堂练习</h2>
+<ul>
+<li><p>一个简单的网络攻防环境组成有哪些？ （多选）</p>
+<ul>
+<li>A： 攻击机</li>
+<li>B： 靶机</li>
+<li>C：入侵检测 </li>
+<li>D：网络连接设备</li>
+</ul>
+</li>
+<li><p>入侵检测系统的最佳部署位置（）（单选）</p>
+<ul>
+<li>A： 攻击机</li>
+<li>B：靶机</li>
+<li>C：网关</li>
+<li>D：其他设备</li>
+</ul>
+</li>
+</ul>
+<h1 id="-">信息系统安全</h1>
+<ul>
+<li><strong>目标</strong><ul>
+<li>了解信息系统安全的定义<ul>
+<li>理解信息系统安全中机密性的基本含义</li>
+<li>理解信息系统安全中完整性的基本含义</li>
+<li>理解信息系统安全中可用性的基本含义</li>
+<li>理解信息系统安全中可追溯性的基本含义</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="-">信息系统安全定义</h2>
+<blockquote>
+<p>探讨了半天安全， 那么“安全”是个什么玩意，我们一起来看一下：</p>
+</blockquote>
+<p>信息系统安全的含义（不再局限于Linux系统）一般包括：</p>
+<ul>
+<li><p><strong>机密性</strong>（Confidentiality）： 不要泄露信息和资源</p>
+<ul>
+<li>对信息或资源的隐藏，信息不被非授权人员所获取。</li>
+<li>本质上就是不被“非授权人员”读取。 也就是控制 “r” 权限</li>
+</ul>
+</li>
+</ul>
+<p><img src="./images/02-01_瑞士银行.png" alt="最安全的银行"></p>
+<ul>
+<li><p><strong>完整性</strong>（Integrity）：对数据或资源的可信赖程度，通常用于表述防止不当或未经授权的修改</p>
+<ul>
+<li>本质上，就是不被非授权人员 “写”这个信息，也就是控制 w权限。</li>
+<li>需要说明的是：<ul>
+<li>我们在安全领域探讨的完整性，是完整性的预防机制，也就是阻止未经授权的改写数据企图； </li>
+<li>在密码学领域中，所提到的完整性，指的是完整性的检测机制，通过哈希函数（哈希码）来校验数据是否被改变。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>可用性</strong> （Availability）：使用所期望的信息或资源的能力</p>
+<ul>
+<li>一个不可用的系统如没有系统一样糟糕</li>
+<li>对信息和资源的期望使用能力，保证授权用户对信息和资源的使用不被非正当拒绝。</li>
+<li>常用双机、多路径，磁盘raid、多网卡bind、并行冗余prip网络等手段提过可用性。</li>
+<li>DOS攻击就是通过破坏系统的可用性来达到攻击的目的</li>
+</ul>
+<p>北京大学的卿斯汉老师在他的书中增加了一个：</p>
+</li>
+<li><p><strong>可追溯性</strong> （Traceability）：系统须保证对数据的访问和系统能力的使用的个人行为的可追溯性，并且提供审计这些行为的方法。</p>
+<ul>
+<li>一种事后追踪机制</li>
+<li>涉及三个要素： 标识、鉴别、审计。</li>
+</ul>
+</li>
+</ul>
+<p><strong>注</strong> 以上定义来源于《计算机安全学-安全的艺术与科学》 《操作系统安全设计》</p>
+<p><img src="./images/linux-security-cia.jpeg" alt="CIA"></p>
+<ul>
+<li><p><strong>讨论</strong></p>
+<ul>
+<li><p>谈谈你对<strong>可追溯性</strong>的理解，　或者说他的应用场景？</p>
+</li>
+<li><!-- 入侵检测，入侵分析、追根溯源？  -->
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="-">随堂练习</h2>
+<ul>
+<li><p>信息系统安全的含义有哪些？ 多选</p>
+<ul>
+<li>A : 机密性</li>
+<li>B： 完整性</li>
+<li>C： 可用性</li>
+<li>D： 可追溯性</li>
+</ul>
+</li>
+<li><p>以下攻击方式，哪些是破坏系统可用性的</p>
+<ul>
+<li>A： SSH暴力破解</li>
+<li>B： DDOS攻击</li>
+<li>C： 社会工程学</li>
+<li>D： 漏洞攻击</li>
+</ul>
+</li>
+</ul>
+<h1 id="linux-">Linux 基本安全防护技术</h1>
+<ul>
+<li><p><strong> 目标 </strong></p>
+<ul>
+<li><strong>掌握</strong>“许可位”机制，并<strong>应用</strong>该机制对系统进行安全增强</li>
+<li><strong>掌握</strong>访问控制列表机制，并<strong>应用</strong>该机制对系统进行安全增强</li>
+<li><strong>掌握</strong>文件属性机制，并<strong>应用</strong>该机制对系统进行安全增强</li>
+<li><strong>掌握</strong>PAM配置方法，并<strong>应用</strong>该机制对系统进行安全增强</li>
+<li><strong>了解</strong>能力机制。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="-">概述</h2>
+<blockquote>
+<p>安全防护基础主要是会用Linux系统， 熟悉Linux基本操作命令。</p>
+</blockquote>
+<p>在这个章节中，我们主要探讨自主访问控制（许可位、ACL）、文件属性、 PAM技术、能力机制等</p>
+<h3 id="-">补充命令</h3>
+<p>本章节中，涉及一些新的命令，一些通用的命令如下所述</p>
+<ul>
+<li><p><strong>whoami</strong></p>
+<ul>
+<li>显示与当前的有效用户ID相关联的用户名</li>
+<li>简单的说，就是在操作之前确认一下<strong>我是谁</strong></li>
+</ul>
+</li>
+<li><p><strong>id</strong></p>
+<ul>
+<li>查看用户的id</li>
+<li><code>id username</code> 查看username用户的id </li>
+</ul>
+</li>
+<li><p><strong>useradd</strong></p>
+<ul>
+<li>添加用户</li>
+<li>-m ： 一起创建用户的家目录</li>
+<li>-s： 指定用户的登录shell类型， <code>-s /bin/bash</code></li>
+<li>示例： <code>uaseradd  -m -s /bin/bash itcast</code> </li>
+</ul>
+</li>
+<li><p><strong>userdel</strong></p>
+<ul>
+<li>删除已存在用户</li>
+<li>-r： 用户主目录以及用户主目录下文件一起删除</li>
+<li>示例： <code>userdel -r newuser</code> </li>
+</ul>
+</li>
+<li><p><strong>passwd</strong></p>
+<ul>
+<li>修改用户口令</li>
+<li>两种典型用法：<ul>
+<li>修改当前用户口令<code>passwd</code></li>
+<li>修改指定用户口令<code>passwd username</code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="-">常用术语</h3>
+<ul>
+<li><p><strong>访问、主体、客体</strong></p>
+<ul>
+<li>访问： 两个实体间的信息流动 </li>
+<li>主体： 发起访问的实体，主动的， 通常为代表某个用户的进程</li>
+<li>客体： 响应访问的实体，被动的， 通常为文件</li>
+</ul>
+</li>
+<li><p><strong>访问类型</strong></p>
+</li>
+</ul>
+<p>访问就是信息的流动，可以分为读、写、执行三种类型</p>
+<pre><code>* 读（Read/r）：
+    * 信息由客体流向主体
+* 写（Write/w）：
+    * 信息由主体流向客体
+* 执行（Execute/x）：
+    * 将客体的内容引入内存并作为代码执行
+</code></pre><p><strong>补充说明</strong> 在有些文档中，目录文件的执行，称之为搜索（Search）对目录的内容进行搜索（查找）。</p>
+<p>以 <code>cat file</code> 为例解读上述基本概念</p>
+<h2 id="-">访问权限 （许可位）</h2>
+<blockquote>
+<p>在信息系统安全章节中，我们探讨了半天安全，本质上，安全就是控制“文件”（客体），的读、写，文件不被非授权人员读取，满足安全的机密性；文件不被非授权人员写，满足安全的完整性。所以读、写就构成了安全最基本的含义。</p>
+</blockquote>
+<h3 id="-">文件权限（访问许可位）</h3>
+<p>我们探讨文件权限， 准确的描述是“用户A对文件B的访问权限” ， 判断用户A是否被允许访问文件B。 可以分两步：</p>
+<ul>
+<li>先判断用户A的类别(所谓Ａ的类别，就是Ａ是属主？　属组？　还是其他？)</li>
+<li>在根据用户的类别，查看相应的许可位</li>
+</ul>
+<h4 id="-">属主、属组、“其他”的概念</h4>
+<p> 在探讨一个文件是否被允许访问，首先需要明确访问者的“身份类别&quot;，因为文件的访问许可就是以文件的属主、属组、其他来组织的。</p>
+<blockquote>
+<p>以一下内容，参考自《Linux私房菜-基础篇》， 举例比较清晰</p>
+</blockquote>
+<p>关于者和属组的关系， 我们可以使用目前“家庭”的观念来来进行解说。假讴有一家人,家里只有三兄弟,分别是王大毛、王二毛、王三毛三个人, 而这个家庭是登记在王大毛的名下的！所以,“王大毛家有三个人,分别是王大毛、王二毛，王三毛”, 而且这三个人都有自己的房间,并且共同拥有一个客厅喔!</p>
+<ul>
+<li><p>属主的概念： 由于王家三人各自拥有自己的房间， 所以, 王二毛虽然可以进入王三毛的房间,但是二毛不能翻三毛的抽屉喔!那样会被三毛K的! 因为抽屉里面可能有三毛自己私人的东西,例如情书啦,日记啦等等的,这是“私人的空间”,所以当然不能让二毛拿啦。</p>
+</li>
+<li><p>属组的概念： 由于共同拥有客厅,所以王家三兄弟可以在客厅打开电规机啦、 翻阅报纸啦、坐在沙发上面发呆啦等等的! 反正,只要是在客厅的玩意儿,三兄弟都可以使用喔! 因为大家都是一家人嘛!</p>
+<p>这样说来应该有点晓得了喔! 那个“王大毛家”就是所谓的“属组”, 至于三兄弟就是分别为三个“属主”,而这三个属主是在同一个属组里面的喔! 而三个属主虽然在同一属组内,但是我们可以设定“权限” 好让某些用户个人的信息不被属组的属主查询,以保有个人“私人的空间”啦! 而设定属组共享,则可让大家共同分享喔!</p>
+</li>
+<li><p>“其他”的概念: 那么今天又有个人,叫做张小猪,他是张小猪家的人,与王家没有关系啦! 这个时候,除非王家认识张小猪,然后开门让张小猪进来王家,否则张小猪永进没有办法进入王家, 更不要说迚到王三毛的房间啦!不过,如果张小猪透过关系认识了三毛,并且跟王三毛成为好朊友,那么张小猪就可以透过三毛进入王家啦!呵呵!没错!那个张小猪就是所谓的“其他人,Others”啰!</p>
+<p>因此， 简单的说，在 Linux 里面,任何一个文件都具有&quot;User, Group 及 Others”三种身份的个别权限, 我们可以将上面的说明以底下的图来解释:</p>
+</li>
+</ul>
+<p><img src="./images/linux-02-02-1.png" alt="属主和属组"></p>
+<p> 一般来说， 我们通常用简写字母来表示属主、属组、其他：</p>
+<ul>
+<li>u: 属主</li>
+<li>g: 属组</li>
+<li>o: 其他</li>
+</ul>
+<blockquote>
+<p>从ls命令输出，进行逐列介绍</p>
+</blockquote>
+<pre><code>Panda.Guo@2018-04-03 14:32:43 $ ls -l
+drwxr-xr-x 2 panda panda 4096 6月   3 14:32 dir
+-rwxr--r-- 1 panda panda    0 6月   3 13:43 file1
+</code></pre><h4 id="-">权限（访问许可位）</h4>
+<blockquote>
+<p>许可位，共计4组组成， 每组3位， </p>
+</blockquote>
+<ul>
+<li><p>S/Owner/Group/Other</p>
+</li>
+<li><p>S组</p>
+<ul>
+<li>b3 → SUID；b2 → SGID；b1 -&gt; Sticky</li>
+</ul>
+</li>
+<li><p>Owner组</p>
+<ul>
+<li>b3 → Read；b2 → Write; b1 -&gt; Execute</li>
+</ul>
+</li>
+<li><p>Group组</p>
+<ul>
+<li>b3 → Read；b2 → Write; b1 -&gt; Execute</li>
+</ul>
+</li>
+<li><p>Other组</p>
+<ul>
+<li>b3 → Read；b2 → Write; b1 -&gt; Execute；</li>
+</ul>
+</li>
+</ul>
+<!-- 此处我们先不探讨S组，这部分内容有点深， 所以我们下述用3个组，而不是4个组来描述 -->
+<h3 id="-">文件权限（许可位）表示方式</h3>
+<p> 对于许可位，有两种表示方式：</p>
+<p><strong>数字表示方式</strong></p>
+<ul>
+<li>用3组8进制的数字。来描述u/g/o三个部分的访问许可<ul>
+<li>每组用3位，来表示这部分的rwx（访问类型）</li>
+<li>对应就是 b3 b2 b1 (4 2 1) , </li>
+<li>哪一位被许可，则值为1<ul>
+<li>例： 我们用644， 表示文件属主可读、写， 组可以读、 其他可读</li>
+<li>例： 我们用755， 表示文件属主可读、写、执行， 组可读、执行， 其他可读、可执行。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p><strong> 符号表示方式 </strong></p>
+<ul>
+<li><p>可以用r、w、x、-来表示文件的访问权限</p>
+<ul>
+<li>用r描述读</li>
+<li>用w描述写</li>
+<li>用x描述执行</li>
+<li>用-表示无权限</li>
+</ul>
+</li>
+<li><p><strong>实例解读文件访问许可</strong></p>
+<ul>
+<li>添加用户itcast<ul>
+<li><code>sudo useradd -m -s /bin/bash itcast</code></li>
+</ul>
+</li>
+<li><p>修改itcast 口令,为itcast</p>
+<ul>
+<li><code>sudo passwd itcast</code></li>
+</ul>
+</li>
+<li><p>以panda用户创建文件(644)，验证文件属主可读写，以itcast用户协助验证other可读不可写。</p>
+</li>
+</ul>
+</li>
+</ul>
+<pre><code class="lang-bash">Panda.Guo@2018-06-04 11:11:57 $touch file-name
+Panda.Guo@2018-06-04 11:25:35 $ ls -l  file-name
+-rw-r--r-- 1 panda panda 0 6月   4 11:03 file-name
+Panda.Guo@2018-06-04 11:26:32 $ whoami
+panda
+Panda.Guo@2018-06-04 11:26:37 $ echo &quot;Hello world&quot; &gt;&gt; file-name
+Panda.Guo@2018-06-04 11:26:53 $ cat file-name
+Hello world
+Panda.Guo@2018-06-04 11:27:07 $
+</code></pre>
+<p>以 itcast用户验证 others，只有r权限</p>
+<pre><code class="lang-bash">Panda.Guo@2018-06-04 11:27:55 $ su  itcast
+密码：
+itcast@PandaGuo:/home/panda/tmp/itcast$ whoami
+itcast
+itcast@PandaGuo:/home/panda/tmp/itcast$ ls -l
+总用量 8
+drwxr-xr-x 2 panda panda 4096 6月   4 11:04 dir
+-rw-r--r-- 1 panda panda   12 6月   4 11:26 file-name
+itcast@PandaGuo:/home/panda/tmp/itcast$ cat file-name
+Hello world
+itcast@PandaGuo:/home/panda/tmp/itcast$ echo &quot;itcast&quot; &gt;&gt; file-name
+bash: file-name: 权限不够
+</code></pre>
+<h3 id="-">变更文件的访问权限</h3>
+<p>通过修改文件的许可位，可以变更文件的访问权限。</p>
+<blockquote>
+<p>变更许可位有两种方式， 一种数字类型，一种符号类型</p>
+</blockquote>
+<ul>
+<li>符号类型</li>
+</ul>
+<blockquote>
+<p>我之前介绍， 文件的的访问许可由三组（u/g/o）、三个访问类型（r/w/x）组成。</p>
+</blockquote>
+<pre><code class="lang-bash">Panda.Guo@2018-04-03 16:22:47 $ ls -l file1
+-rw-r--r-- 1 panda panda 0 6月   3 16:22 file1
+Panda.Guo@2018-04-03 16:22:58 $ chmod u+x file1 
+Panda.Guo@2018-04-03 16:23:05 $ ls -l file1
+-rwxr--r-- 1 panda panda 0 6月   3 16:22 file1
+</code></pre>
+<ul>
+<li>数字类型：</li>
+</ul>
+<pre><code class="lang-bash">Panda.Guo@2018-04-03 16:23:08 $ ls -l file2
+-rw-r--r-- 1 panda panda 0 6月   3 16:22 file2
+Panda.Guo@2018-04-03 16:23:43 $ chmod 666 file2
+Panda.Guo@2018-04-03 16:23:53 $ ls -l file2
+-rw-rw-rw- 1 panda panda 0 6月   3 16:22 file2
+</code></pre>
+<h3 id="-sticky">粘着位sticky</h3>
+<blockquote>
+<p>设置目录的sticky位后， 该目录下的文件，只能被创建者删除</p>
+</blockquote>
+<ul>
+<li><p>对谁有效？ </p>
+<ul>
+<li>只对目录有效。对其他的客体无效。</li>
+</ul>
+</li>
+<li><p>如何设定？</p>
+<ul>
+<li><code>chmod 1xxx file</code></li>
+</ul>
+</li>
+<li><p>实例</p>
+</li>
+<li><p>讨论： 粘着位的应用场景？ </p>
+</li>
+</ul>
+<h3 id="-">讨论 （思考）</h3>
+<ul>
+<li><p>umask 为用户创建文件的掩码，代表用户创建文件的最终权限为（mode &amp; ~umask）, 那么您的观点，umask取值应为多少合适？</p>
+</li>
+<li><p>umask 设置只在当前终端中临时有效， 你有几种办法可以使其登录后默认生效</p>
+</li>
+<li><p>答题： 有一个目录，要求任何人可以创建客体并可以对目录进行读/搜索访问，但只有创建者可以删除，试用8进制写出它应具有的许可位</p>
+</li>
+</ul>
+<hr>
+<h2 id="-acl">访问控制列表 -ACL</h2>
+<blockquote>
+<p>ACL是什么： 存储在文件扩展属性中的一组访问控制规则， (利用文件的扩展属性保存额外的访问控制权限）</p>
+</blockquote>
+<h3 id="-acl">为什么需要ACL</h3>
+<blockquote>
+<p>我们需要一种更细粒度的访问控制方式， 对other组的用户成员，作出区分</p>
+</blockquote>
+<ul>
+<li>文件访问控制（许可位）是通过文件的属主user、属组group、其他other来实现访问权限控制的， 对于“其他”来说， 一个用户既不是文件属主，也不属于同一组，那么就统统属于“其他”， 这样的 ACL 提供一种更细粒度的权限控制方法。</li>
+</ul>
+<p><strong>实例分析</strong></p>
+<p>创建test01用户，test02用户， 访问itcast用户的文件，（相对于itcast用户，test01，test02用户为others用户）， 无法做到对test01用户和test02用户的权限区别</p>
+<h3 id="acl-">ACL 基本操作</h3>
+<blockquote>
+<p>对于ACL基本操作来说，也就是ACL设定、ACL查询、ACL移除</p>
+</blockquote>
+<p>我们可通过setfacl、getfacl 来设定和查询文件的访问控制列表</p>
+<h4 id="-acl">设定/修改ACL</h4>
+<blockquote>
+<p>我们可以通过<code>setfacl -m</code>， 来设定文件的ACL, （注： 文件属主和特权用户可进行操作)</p>
+</blockquote>
+<ul>
+<li>基本用法: setfacl -m u:username:rwx  filename<ul>
+<li>-m: 选项</li>
+<li>u:itcast:rwx , 设定用户itcast，访问权限为rwx<ul>
+<li>u： 用户</li>
+<li>g： 组</li>
+<li>m： 掩码</li>
+</ul>
+</li>
+<li>filename， 文件，你想设定谁的ACL</li>
+</ul>
+</li>
+</ul>
+<pre><code>itcast@itcast:~/class$ setfacl -m u:test01:rw ./hello
+</code></pre><p><strong>注意</strong>， 添加文件的acl后， 命令<code>ls -l</code>会发生变化， 如：</p>
+<p>文件原始显示</p>
+<pre><code>itcast@itcast:~/class$ ls -l
+-rw-r--r-- 1 itcast itcast 0 6月   4 17:40 file
+</code></pre><p>添加文件acl后， 命令<code>ls -l</code> 变为： </p>
+<pre><code>itcast@itcast:~/class$ setfacl -m u:itcast:w file 
+itcast@itcast:~/class$ ls -l file 
+-rw-rw-r--+ 1 itcast itcast 0 6月   4 17:40 file
+</code></pre><p>注意： 有+号，代表此文件被设定了ACL， 那么此时，文件file的权限，就受到ACL影响</p>
+<h4 id="acl-">ACL查询</h4>
+<blockquote>
+<p> 我们可以通过 <code>getfacl</code>， 来获取文件的ACL</p>
+</blockquote>
+<ul>
+<li>基本用法 <code>getfacl ./filename</code> </li>
+</ul>
+<pre><code>itcast@itcast:~/class$ getfacl ./hello 
+# file: hello
+# owner: itcast
+# group: itcast
+user::rw-
+user:test01:rw-
+group::rw-
+mask::rw-
+other::r--
+
+itcast@itcast:~/class$
+</code></pre><ul>
+<li>显示解读<ul>
+<li>user后面没有跟用户名，表示的是文件属主的权限</li>
+<li>user 后面有用户名， 表示是指定用户的权限</li>
+<li>group后面没有跟组名，表示的是文件属组的权限</li>
+<li>mask表示的是额外访问控制权限的最大权限，mask可自定义，自定义之后，额外访问控制权限的最大权限不得超过mask的权限，否则超出的权限会被裁掉。详细见下一章节</li>
+</ul>
+</li>
+</ul>
+<h4 id="acl-">ACL移除</h4>
+<blockquote>
+<p> 移除文件file1 的ACL, 可通过<code>setfacl -x</code></p>
+</blockquote>
+<ul>
+<li>典型用法 <code>setfacl -x u:itcast file</code></li>
+</ul>
+<pre><code>itcast@itcast:~/class$ setfacl -x u:test01 ./hello
+</code></pre><p><strong>实例展示</strong></p>
+<ol>
+<li><p>用户itcast创建hello文件</p>
+<pre><code>itcast@itcast:~/class$ touch hello
+itcast@itcast:~/class$ ls -l 
+总用量 0
+-rw-rw-r-- 1 itcast itcast 0 8月  24 11:11 hello
+</code></pre></li>
+<li><p>验证用户test01对其只有r权限，</p>
+<pre><code>test01@itcast:/home/itcast/class$ whoami 
+test01
+test01@itcast:/home/itcast/class$ ls -l hello 
+-rw-rw-r-- 1 itcast itcast 0 8月  24 11:11 hello
+test01@itcast:/home/itcast/class$ cat ./hello 
+hello world
+test01@itcast:/home/itcast/class$ echo &quot;hello world&quot; &gt; ./hello
+bash: ./hello: 权限不够
+</code></pre></li>
+<li><p>设置hello文件ACL</p>
+<pre><code>itcast@itcast:~/class$ setfacl -m u:test01:rw ./hello 
+</code></pre></li>
+<li><p>验证用户test01对文件的hello权限（rw）</p>
+<pre><code>test01@itcast:/home/itcast/class$ whoami
+test01
+test01@itcast:/home/itcast/class$ ls -l ./hello 
+-rw-rw-r--+ 1 itcast itcast 12 8月  24 11:17 ./hello
+test01@itcast:/home/itcast/class$ getfacl ./hello 
+# file: hello
+# owner: itcast
+# group: itcast
+user::rw-
+user:test01:rw-
+group::rw-
+mask::rw-
+other::r--
+test01@itcast:/home/itcast/class$ cat ./hello 
+hello world
+test01@itcast:/home/itcast/class$ echo &quot;hello test01&quot; &gt;&gt; hello 
+test01@itcast:/home/itcast/class$ cat ./hello 
+hello world
+hello test01
+test01@itcast:/home/itcast/class$ 
+</code></pre></li>
+<li><p>验证用户test02对文件hello权限（r-）</p>
+</li>
+</ol>
+<h3 id="-">文件权限的有效次序</h3>
+<ul>
+<li>当一个用户将要访问一个文件的时候(<strong>没有acl</strong>的情况下):<ul>
+<li>首先应用Owner权限，当要访问的文件的属主和该用户一致的情况下，就以该属主的权限去执行文件</li>
+<li>其次应用Group的权限，当要访问的文件的属组和用户的属组一致的情况下，就以该属组的权限去执行文件</li>
+<li>最后应用Other的权限，如果Other有相应的权限的话，就以Other的权限去执行文件。</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li><p>当一个用户要访问一个文件的时候(<strong>有acl</strong>的情况下):</p>
+<ul>
+<li>如果用户是文件属主， 按文件属主的权限位判定访问控制</li>
+<li>如果用户不是文件属主， 而是符合ACL中的user项， 则按该项权限位判别且受mask限制。</li>
+<li>如果用户的属组属于group或者ACL中group项， 只要组或者ACL的group项，允许优先且受mask限制。</li>
+<li>否则应用Other的权限。</li>
+</ul>
+<p>上述内容，详见<code>man acl</code> 的 “ACCESS CHECK ALGORITHM”， 此处简单描述.</p>
+</li>
+</ul>
+<blockquote>
+<p><strong>注</strong> 此处用“用户”表述并不准确， 严格来说应该是“代表某个用户执行的那个进程的有效ID(euid)”， 为了便于大家理解，不引入太多的概念。</p>
+</blockquote>
+<p><strong> 示例 </strong></p>
+<ul>
+<li>去掉文件属主panda，对文件file1的写权限</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-03 18:22:56 $ ls -l file1 
+-rw-rw-r--+ 1 panda panda 4 6月   3 17:57 file1
+Panda.Guo@2018-04-03 18:23:06 $ chmod u-w file1  
+Panda.Guo@2018-04-03 18:23:56 $ ls -l file1 
+-r--rw-r--+ 1 panda panda 4 6月   3 17:57 file1
+</code></pre><ul>
+<li>权限验证</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-03 18:24:01 $ cat file1
+bbb
+Panda.Guo@2018-04-03 18:24:08 $ echo &quot;aaa&quot; &gt;&gt; file1
+bash: file1: 权限不够
+</code></pre><ul>
+<li>添加访问控制列表</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-03 18:24:44 $ setfacl -m u:panda:rw file1
+Panda.Guo@2018-04-03 18:24:49 $ getfacl file1
+# file: file1
+# owner: panda
+# group: panda
+user::r--
+user:panda:rw-
+user:itcast:rwx
+group::r--
+mask::rwx
+other::r--
+</code></pre><ul>
+<li>权限验证</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-03 18:24:56 $ echo &quot;aaa&quot; &gt;&gt; file1 
+bash: file1: 权限不够
+</code></pre><h3 id="acl-mask">ACL中的mask</h3>
+<ul>
+<li>设定</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-03 19:37:38 $ setfacl  -m m::r -m u:itcast:rwx ./file1
+Panda.Guo@2018-04-03 19:38:38 $ getfacl ./file1 
+# file: file1
+# owner: panda
+# group: panda
+user::r--
+user:panda:rw-            #effective:r--
+user:itcast:rwx            #effective:r--
+group::r--
+mask::r--
+other::r--
+
+Panda.Guo@2018-04-03 19:38:46 $ 
+</code></pre><ul>
+<li>验证</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-03 17:56:40 $ su itcast
+密码：
+itcast@PandaGuo:/home/panda/tmp/itcast$ ls
+chown  dir  file1  file2  file3
+itcast@PandaGuo:/home/panda/tmp/itcast$ cat file1 
+aa
+itcast@PandaGuo:/home/panda/tmp/itcast$ echo &quot;bbb&quot; &gt; file1
+bash: file1: 权限不够
+</code></pre><h3 id="-">参考资料</h3>
+<pre><code>$ man acl
+$ man setfacl
+$ man getfacl
+</code></pre><h3 id="-">讨论(思考)</h3>
+<ul>
+<li>访问控制列表的应用场景</li>
+<li></li>
+</ul>
+<hr>
+ <!-- 一个有扩展属性的文件，权限位的最后一位有一个+号，这表示该文件有文件访问控制列表，文件访问控制列表里用的是文件的扩展属性，且此种文件在进行复制或归档的时候，文件的额外访问控制权限可能无法复制或归档，除非使用特殊的选项或命令。 -->
+<h2 id="-">文件属性</h2>
+<blockquote>
+<p>我们在之前探讨信息安全时提到，完整性在Linux系统上，就是控制写，也就是一个文件不被非授权人员所篡改，我们就可以认为它是完整的。有些文件属性设定后，就可以避免对文件修改（超级用户也被允许），可以很好的满足我们对完整性的需求。</p>
+</blockquote>
+<h3 id="-">什么是文件属性</h3>
+<ul>
+<li>在<strong>特定的文件系统</strong>中支持的，对文件、文件夹等文件<strong>额外</strong>施加的一些访问控制<!-- * 存储于文件系统的扩展属性中。 -->
+</li>
+</ul>
+<!-- 举例描述，特定文件系统（ext2/3/4）， -->
+<h3 id="-">文件都有那些属性</h3>
+<p> 在特定的文件系统上， 当前文件具备那些可用的文件属性， 这个以EXT4文件系统为例：</p>
+<pre><code> Panda.Guo@2018-06-05 13:42:39 $ man ext4
+</code></pre><p>在帮助信息中， 检索关键字 &quot;FILE ATTRIBUTES&quot;  可以看到Ext系列文件系统中支持的文件属性， 以下作为拣选：</p>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th style="text-align:left">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>a (append only)</td>
+<td style="text-align:left">仅允许以追加的方式打开文件</td>
+</tr>
+<tr>
+<td>A (no atime updates)</td>
+<td style="text-align:left">这个属性不允许更新文件的atime</td>
+</tr>
+<tr>
+<td>c (compressed)</td>
+<td style="text-align:left">启用这个属性时，文件在磁盘上会自动压缩</td>
+</tr>
+<tr>
+<td>d (no dump)</td>
+<td style="text-align:left">不能使用dump命令备份文件</td>
+</tr>
+<tr>
+<td>D (synchronous directory updates)</td>
+<td style="text-align:left">设置了文件夹的D属性时，更改会在同步保存在磁盘上</td>
+</tr>
+<tr>
+<td>e (extent format)</td>
+<td style="text-align:left">它表明，该文件使用磁盘上的块的映射扩展</td>
+</tr>
+<tr>
+<td>i (immutable)</td>
+<td style="text-align:left">在文件上启用这个属性时，我们不能更改、重命名或者删除这个文件</td>
+</tr>
+<tr>
+<td>j (data journaling)</td>
+<td style="text-align:left">设置了这个属性时，文件的数据首先保存在日志中，然后再写入文件</td>
+</tr>
+<tr>
+<td>S (synchronous updates)</td>
+<td style="text-align:left">设置了这个属性时，变更或更改同步保存到磁盘上</td>
+</tr>
+</tbody>
+</table>
+<h3 id="-">文件属性管理（添加、删除、查看）</h3>
+<p>有两个命令 <code>lsattr</code> 和 <code>chattr</code> 用来管理属性。下面是常用属性的列表。</p>
+<p>chattr属性中可以使用的不同选项 ：</p>
+<pre><code>-R 递归地修改文件夹和子文件夹的属性
+-V chattr命令会输出带有版本信息的冗余信息
+-f 忽略大部分错误信息
+</code></pre><p>在chattr中用于设置或者取消属性的 操作符</p>
+<pre><code>&#39;+&#39; 符号用来为文件和文件夹设置属性，
+&#39;-&#39; 符号用来移除或者取消属性
+&#39;=&#39; 使它们成为文件有的唯一属性。
+</code></pre><p>chattr 和 lsattr 命令的基本语法 ：</p>
+<pre><code># chattr &lt;options&gt; &lt;attributes&gt; &lt;file or Directory &gt;
+# lsattr &lt;File or Directory&gt;
+</code></pre><ul>
+<li>使用‘i’属性使文件不可更改</li>
+</ul>
+<pre><code>Panda.Guo@2018-06-05 14:05:14 $ ls -l file
+-rw-r--r-- 1 panda panda 12 6月   5 14:05 file
+Panda.Guo@2018-06-05 14:05:28 $ cat file 
+Hello World
+Panda.Guo@2018-06-05 14:05:31 $ sudo chattr  +i file 
+Panda.Guo@2018-06-05 14:05:46 $ sudo lsattr file 
+----i---------e---- file
+</code></pre><p> 对 file 文件添加 “i” 属性</p>
+<ul>
+<li>修改 file 文件</li>
+</ul>
+<pre><code>Panda.Guo@2018-06-05 14:05:51 $ echo &quot;Hello 2 &quot; &gt;&gt; file 
+bash: file: 不允许的操作
+Panda.Guo@2018-06-05 14:09:05 $ cat file 
+Hello World
+</code></pre><ul>
+<li>删除 file 文件</li>
+</ul>
+<pre><code>Panda.Guo@2018-06-05 14:09:17 $ rm file 
+rm: 无法删除&#39;file&#39;: 不允许的操作
+</code></pre><ul>
+<li>对 file 文件创建硬连接</li>
+</ul>
+<pre><code>Panda.Guo@2018-06-05 14:09:22 $ ln file  file-link
+ln: 无法创建硬链接&#39;file-link&#39; =&gt; &#39;file&#39;: 不允许的操作
+</code></pre><ul>
+<li>以root用户，删除file 文件</li>
+</ul>
+<pre><code>Panda.Guo@2018-06-05 14:09:45 $ su 
+密码：
+root@PandaGuo:/home/panda/tmp/itcast# whoami
+root
+root@PandaGuo:/home/panda/tmp/itcast# rm file 
+rm: 无法删除&#39;file&#39;: 不允许的操作
+</code></pre><ul>
+<li>对于已经设置 i 属性的文件，如果需要修改、删除等操作，需要以特权用户移除i属性后，再进行相应操作</li>
+</ul>
+<pre><code>Panda.Guo@2018-06-05 14:12:42 $ lsattr file 
+----i---------e---- file
+Panda.Guo@2018-06-05 14:12:51 $ sudo chattr -i file 
+Panda.Guo@2018-06-05 14:13:01 $ lsattr file 
+--------------e---- file
+Panda.Guo@2018-06-05 14:13:12 $ rm file 
+Panda.Guo@2018-06-05 14:13:14 $ ls file
+ls: 无法访问&#39;file&#39;: 没有那个文件或目录
+</code></pre><p><strong>讨论</strong></p>
+<ul>
+<li>文件属性a、i的应用场景</li>
+</ul>
+<h2 id="pam-">PAM技术</h2>
+<blockquote>
+<p>在探讨PAM技术之前， 我们先探讨一个术语“标识&amp;鉴别”</p>
+</blockquote>
+<ul>
+<li>标识：登录系统的用户需要标识， 标识解决“我是谁”的话题</li>
+<li>鉴别：鉴别解决“我是我”的话题</li>
+</ul>
+<h3 id="pam-">PAM是什么</h3>
+<p>  Pluggable Authentication Modules , 可插拔的鉴权模块， sun提出的一种鉴权机制。</p>
+<p>  它通过提供一些动态链接库和一套统一的API，将系统提供的服务 和该服务的认证方式分开，使得系统管理员可以灵活地根据需要给不同的服务配置不同的认证方式而无需更改服务程序，同时也便于向系统中添加新的认证手段。</p>
+<pre><code>Panda.Guo@2018-06-05 14:48:40 $ ls /lib/x86_64-linux-gnu/security/
+</code></pre><h3 id="-pam">如何使用 PAM</h3>
+<blockquote>
+<p>Pam使用非常简单， 就是修改<strong>相应配置文件</strong>，添加<strong>pam 模块</strong>的配置。</p>
+</blockquote>
+<pre><code>Panda.Guo@2018-06-05 15:02:59 $ ls /etc/pam.d/
+</code></pre><p>关于pam配置相关的帮助信息</p>
+<pre><code>Panda.Guo@2018-06-05 15:03:59 $ man pam.conf
+</code></pre><p>以 <code>common-password</code> 配置文件简单介绍配置方式</p>
+<pre><code>Panda.Guo@2018-06-05 15:04:55 $ vi  /etc/pam.d/common-password
+</code></pre><h3 id="pam-">PAM 配置实例 - 弱口令防护</h3>
+<blockquote>
+<p>典型的弱口令防护策略:   pam_cracklib</p>
+</blockquote>
+<blockquote>
+<p>弱口令防护，简单说就是增加口令负责度</p>
+</blockquote>
+<ul>
+<li>口令长度不小于8位</li>
+<li>口令是大、小字母、数字和特殊字符组成</li>
+<li>口令不得与账户名相同</li>
+</ul>
+<pre><code>Panda.Guo@2018-06-05 15:05:09 $ sudo vi /etc/pam.d/common-password
+password  required  pam_cracklib.so retry=3 minlen=8 difok=3 lcredit=-1 ucredit=-1 dcredit=-1 ocredit=-1 reject_username
+</code></pre><p>通过 <code>man pam_cracklib</code> 查看cracklib 选项信息</p>
+<ul>
+<li><p><em>配置描述</em></p>
+<ul>
+<li>retry=3    键入口令错误时，重复次数</li>
+<li>minlen=8    口令最小长度</li>
+<li>lcredit=-1    小写字符至少为1 </li>
+<li>ucredit=-1    大写字母至少为1</li>
+<li>dcredit=-1    数字至少为1</li>
+<li>ocredit=-1     特殊字符至少为1</li>
+<li>difok=3    新旧口令差别至少3个字符</li>
+<li>reject_username    口令中，不允许包括用户名称（正序和逆序）</li>
+</ul>
+</li>
+<li><p>讨论： root用户要不要受口令复杂度的限制。</p>
+</li>
+</ul>
+<h3 id="pam-">PAM 配置实例 - 暴力破解防护</h3>
+<blockquote>
+<p>字典攻击、暴力破解的防护，简单说，就是当你尝试口令错误达到一定次数， 我锁定你账户，延迟一段时间再允许你进行登录即可</p>
+</blockquote>
+<ul>
+<li>连续登录失败5次后，账户锁定10分钟；</li>
+</ul>
+<pre><code>Panda.Guo@2018-06-05 15:14:57 $ sudo vi /etc/pam.d/su
+auth required pam_tally.so unlock_time=600  deny=5
+</code></pre><p>可通过 <code>man pam_tally</code> 查看选项信息</p>
+<ul>
+<li><p><em>配置描述</em></p>
+<ul>
+<li>unlock_time:  用户锁定时间</li>
+<li>deny: 口令输入错误的重复次数 </li>
+</ul>
+</li>
+<li><p>讨论：  锁定时间不是越长越好</p>
+</li>
+</ul>
+<h3 id="-">附录： 配置格式</h3>
+<p> 配置文件有许多配置项(每行对应一个配置项)组成，每一行又分为四列(每列对应一栏)：</p>
+<ul>
+<li><p>第一栏，认证鉴别接口类型：（四类接口）</p>
+<ul>
+<li><p>auth：表示鉴别类接口模块类型用于检查用户和密码，并分配权限</p>
+</li>
+<li><p>account：表示账户类接口，主要负责账户合法性检查，确认帐号是否过期，是否有权限登录系统等；</p>
+</li>
+<li><p>session：会话类接口。实现从用户登录成功到退出的会话控制；</p>
+</li>
+<li><p>password：口令类接口。控制用户更改密码的全过程。</p>
+</li>
+</ul>
+</li>
+</ul>
+<p>每行只能指定一种接口类型</p>
+<ul>
+<li>第二栏，control_flag控制位：</li>
+</ul>
+<p>他的四种可能的取值分别为required、Requisite、sufficient或_optional：</p>
+<pre><code>* required：表示该行以及所涉及模块的成功是用户通过鉴别的必要条件，只有当对应于应用程序的所有带 required标记的模块全部成功后，该程序才能通过鉴别。
+
+* requisite：与required相仿，只有带此标记的模块返回成功后，用户才能通过鉴别。不同之处在于其一旦失败就不再执行堆中后面的其他模块，并且鉴别过程到此结束，同时也会立即返回错误信息。
+
+* sufficient：表示该行以及所涉及模块验证成功是用户通过鉴别的充分条件。也就是说只要标记为sufficient的模块一旦验证成功，那么PAM便立即向应用程序返回成功结果而不必尝试任何其他模块。
+
+    * optional：他表示即便该行所涉及的模块验证失败用户仍能通过认证。在PAM体系中，带有该标记的模块失败后将继续处理下一模块。也就是说即使本行指定的模块验证失败，也允许用户享受应用程序提供的服务。
+</code></pre><p>第三栏，module_path即所使用模块的全路径名称</p>
+<p>第四栏，options用于向特定模块传递相关的选项，然后由模块分析解释这些选项。</p>
+<hr>
+<h2 id="-">特权（能力）机制</h2>
+<blockquote>
+<p>一般来说， root用户是系统最大的威胁， 特权越小，也就就越安全</p>
+</blockquote>
+<h3 id="-">能力是什么</h3>
+<blockquote>
+<p>能力是一种特权。</p>
+</blockquote>
+<p>能力是一种特权， 如果把root用户的超级特权分作N份， 每一份可以作为一个能力子集。</p>
+<pre><code>Panda.Guo@2018-06-05 16:20:47 $ cat /proc/sys/kernel/cap_last_cap 
+37
+</code></pre><p>查看能力的详细介绍</p>
+<pre><code>Panda.Guo@2018-06-05 16:22:23 $ man capabilities
+</code></pre><h3 id="-">如何使用能力</h3>
+<ul>
+<li>通过 <code>setcap</code> 命令设置能力</li>
+</ul>
+<pre><code> setcap &quot;cap_xx,cap_xx2+ep&quot; file
+</code></pre><ul>
+<li>通过 <code>setcap -r</code> 命令设置能力</li>
+</ul>
+<pre><code>setcap -r file
+</code></pre><ul>
+<li>通过 <code>getcap</code> 命令查看能力</li>
+</ul>
+<pre><code>getcap file
+</code></pre><h3 id="-">能力应用举例</h3>
+<ol>
+<li>以 chown修改用户权限需要 cap_chown 特权为例</li>
+</ol>
+<ol start="2">
+<li>以server程序bind  1024下端口，为例，需要cap_net_bind_service能力</li>
+</ol>
+<p>server.c</p>
+<pre><code class="lang-C">#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/ip.h&gt;
+
+#include &lt;unistd.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/socket.h&gt;
+
+#define SER_ADDR 9999
+
+int main(int argc, char *argv[])
+{
+    int sockfd, newsockfd;
+    struct sockaddr_in my_addr, client_addr;
+    char buffer[100];
+
+        /**
+         * Step 1: 创建一个socket， 指定SOCK_STREAM代表TCP
+         */
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+        /**
+         *  Step 2:   绑定一个端口号
+         */
+    memset(&amp;my_addr, 0, sizeof(struct sockaddr_in));
+    my_addr.sin_family = AF_INET;
+    my_addr.sin_port = htons(SER_ADDR);
+    if (bind(sockfd, (struct sockaddr *)&amp;my_addr, sizeof(struct sockaddr_in)) &lt;0){
+        perror(&quot;Error for bind&quot;);
+        return 1;
+    }
+
+        /**
+         * Step 3: 监听连接
+         */
+    listen(sockfd, 5);
+
+        fprintf(stdout, &quot;Serve listenning....\n&quot;);
+        while(1){
+                /**
+                 * Step 4: Accept 一个连接请求
+                 */
+                socklen_t client_len = sizeof(client_addr);
+                newsockfd = accept(sockfd, (struct sockaddr *)&amp;client_addr, &amp;client_len);
+
+                /**
+                 * Step 5: 从当前连接读取数据 */
+                memset(buffer, 0, sizeof(buffer));
+                int len = read(newsockfd, buffer, 100);
+                printf(&quot;Received %d bytes: %s&quot;, len, buffer);
+
+                /**
+                 * Step 6: 关闭当前链接*/
+                close(newsockfd);
+        }
+
+        /**
+         * Step 7: 关闭套接字
+         */
+        close(sockfd);
+
+    return 0;
+}
+
+client.c
+
+```C
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/ip.h&gt;
+
+#include &lt;unistd.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;arpa/inet.h&gt;
+
+#define SER_ADDR &quot;127.0.0.1&quot;
+#define SER_PORT 9999
+//#define SER_ADDR &quot;172.16.28.98&quot;
+
+/* main function */
+int main(int argc, char *argv[])
+{
+        /**
+         * Step 1: 创建一个socket， 指定SOCK_STREAM参数代表基于TCP协议
+         *   如果是UDP协议，则需要用SOCK_DGRAM
+         */
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);       
+
+
+        /**
+         * Step 2: 设置目标主机IP地址和端口号
+         *   IP+Port， 标识网络上某个主机的通信进程
+         */
+    struct sockaddr_in dest;
+    memset(&amp;dest, 0, sizeof(struct sockaddr_in));        
+    dest.sin_family = AF_INET;                        
+    dest.sin_addr.s_addr = inet_addr(SER_ADDR);
+    dest.sin_port = htons(SER_PORT);                     
+
+        /**
+         * Step 3: 连接服务器
+         *
+         */
+    if (connect(sockfd, (struct sockaddr *)&amp;dest,       
+                    sizeof(struct sockaddr_in)) != 0){
+                /* 此处SYN Flood攻击会用到 */
+                fprintf(stdout, &quot;Error for connect: %s\n&quot;, strerror(errno));
+                return 1;
+        }
+
+        /**
+         * Step 4: 向Server发送数据
+         */
+
+        char *buffer1 = &quot;Hello Server!\n&quot;;
+    char *buffer2 = &quot;Hello Again!\n&quot;;
+    write(sockfd, buffer1, strlen(buffer1));       
+
+    write(sockfd, buffer2, strlen(buffer2));
+
+        /**
+         *  Step 5: 关闭连接
+         */
+    close(sockfd);                               
+
+        return 0;
+}
+</code></pre>
+<h2 id="-">随堂练习</h2>
+<ul>
+<li>PAM可插拔的鉴权模块包括很多模块，可用于口令增强的PAM模块是（）<ul>
+<li>A： pam_env</li>
+<li>B： pam_wheel</li>
+<li>C： pam_cracklib</li>
+<li>D： pam_tally</li>
+</ul>
+</li>
+<li></li>
+</ul>
+<h1 id="-">安全审计</h1>
+<ul>
+<li><p><strong>目标</strong></p>
+<ul>
+<li><strong>了解</strong>安全审计的基本概念</li>
+<li><strong>理解</strong>审计规则的基本配置方法</li>
+<li><strong>应用</strong>通过配置审计规则，审计常规文件</li>
+<li><strong>应用</strong>修改审计配置文件，配置审计服务</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="-">审计那些事儿</h2>
+<ul>
+<li><p>审计是个什么东西</p>
+<p>审计是个服务程序（auditd），他从内核中获取你的&quot;操作&quot;信息， 不同于日志。</p>
+</li>
+<li><p>为什么用审计， 或者说这个审计服务解决了哪些问题？ </p>
+<p>审计是一种事后追溯技术，满足“可追溯性”， 他并不阻止对文件的“访问”，仅仅记录访问的信息：“什么时间、谁、进行了什么操作”。</p>
+</li>
+<li><p>启动服务就可以工作了吗</p>
+<p>不，在启动服务前，需要配置审计规则， 就是告诉审计服务， 你关注那个”文件“， 当这个文件有变化“rwxa”， 时候，记录审计信息。没有规则则审计不产生审计记录。</p>
+</li>
+<li><p>那对全系统文件进行审计，岂不是更安全</p>
+<p>错， 审计记录审计信息， 关注的文件越多，记录的信息越多， 从而占用的系统资源越多， 影响系统性能。
+系统性能下降就不满足“可用性”， 所以需要从审计“面”和系统性能直接取平衡， 所以，审计是一种”艺术“</p>
+</li>
+</ul>
+<p><img src="images/03.02-linux-audit.jpeg" alt="审计"></p>
+<h2 id="-">审计服务</h2>
+<blockquote>
+<p>审计是一个服务，只有启动这个服务，才能获得审计日志</p>
+</blockquote>
+<ul>
+<li>启动审计服务</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-29 18:58:46 $ sudo /etc/init.d/auditd restart
+[ ok ] Restarting auditd (via systemctl): auditd.service.
+</code></pre><ul>
+<li>停止审计服务</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-29 19:02:15 $ sudo /etc/init.d/auditd stop
+[ ok ] Stopping auditd (via systemctl): auditd.service.
+</code></pre><ul>
+<li>查看审计服务的工作状态</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-29 18:58:56 $ ps aux | grep &quot;auditd&quot;
+root       229  0.0  0.0      0     0 ?        S    09:17   0:00 [kauditd]
+root     12646  0.0  0.0  54748  3144 ?        S&lt;sl 18:58   0:00 /sbin/auditd -n
+panda    12694  0.0  0.0  16544  1024 pts/2    S+   18:59   0:00 grep --color=auto auditd
+</code></pre><ul>
+<li><p>查看审计日志</p>
+<p>审计日志存放于 /var/log/audit/ 目录下， 典型的查看方式：</p>
+</li>
+</ul>
+<pre><code> Panda.Guo@2018-04-29 19:01:11 $ sudo tail -f  /var/log/audit/audit.log
+type=USER_END  ...
+</code></pre><h2 id="-">审计配置</h2>
+<p>  和审计相关的配置文件， 在 /etc/audit/ 目录下，重要的配置文件 为两个：</p>
+<pre><code> Panda.Guo@2018-04-29 19:05:20 $ sudo ls -lR /etc/audit/
+/etc/audit/:
+-rw-r----- 1 root root  784 4月  13  2017 auditd.conf
+/etc/audit/rules.d:
+-rw-r----- 1 root root 290 5月  29 15:35 audit.rules
+</code></pre><p>其中 auditd.conf 文件是关于审计服务本身的。 audit.rules 文件是关于 审计规则的。</p>
+<h2 id="-">审计规则</h2>
+<p>审计规则最好的说明，就是找 man</p>
+<pre><code>Panda.Guo@2018-04-29 19:18:03 $ man audit.rules 
+</code></pre><p> audit.rules 规则文件有 一条一条的审计规则组成， 那么一条审计规则：</p>
+<pre><code> -w path-to-file -p permissions -k keyname
+
+       where the permission are any one of the following:
+
+              r - read of the file
+
+              w - write to the file
+
+              x - execute the file
+
+              a - change in the file&#39;s attribute
+</code></pre><p><strong>注意</strong> ， 配置完成审计规则后， 需要重启审计服务</p>
+<h2 id="-">审计日志信息解读</h2>
+<p> 对于审计日志信息，我希望获取如下三个关键点：</p>
+<ul>
+<li>什么时间</li>
+<li>谁干的</li>
+<li>干了啥</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-29 19:32:36 $ sudo tail /var/log/audit/audit.log
+type=CRED_DISP msg=audit(1527591671.767:592): pid=12710 uid=0 auid=1000 ses=3 msg=&#39;op=PAM:setcred acct=&quot;root&quot; exe=&quot;/usr/bin/sudo&quot; hostname=? addr=? terminal=/dev/pts/2 res=success&#39;
+</code></pre><p>对于时间部分，可以如下命令解读</p>
+<pre><code>Panda.Guo@2018-04-29 19:32:49 $ date -d @1527591857.022
+2018年 04月 29日 星期二 19:04:17 CST
+</code></pre><p>小结： 审计是个服务， 需要启动。 有两个配置文件， 修改完配置文件需要重启服务。 
+会读审计规则，这个就是入侵分析的基础。</p>
+<ul>
+<li><p><strong>讨论</strong> </p>
+</li>
+<li><p><strong>哪些文件需要进行审计，你能列出文件列表吗</strong></p>
+</li>
+</ul>
+<blockquote>
+</blockquote>
+<h2 id="-">审计命令</h2>
+<ul>
+<li>auditctl<ul>
+<li>auditctl功能用来控制audit系统, 主要查询和配置audit rules</li>
+<li>auditctl -l  查看审计规则</li>
+<li>auditctl -s ：auditd运行状态 </li>
+<li>sudo auditctl -w /etc/passwd -p rwxa -k passwd_key</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li>ausearch:<ul>
+<li>ausearch -k xxxxkey : 查看关键字key相关的内容</li>
+<li>auserrch -f filename : 查看和文件相关内容。</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li>aureport:<ul>
+<li>生成审计报告</li>
+<li>aureport</li>
+<li>aureport -au # 和鉴权相关</li>
+<li>aureport -m  # 和账户修改相关</li>
+</ul>
+</li>
+</ul>
+<h2 id="-">随堂练习</h2>
+<ul>
+<li>在配置审计规则时，可用来对文件的操作许可进行审计，其中选项a含义为：<ul>
+<li>A： 访问文件</li>
+<li>B： 全部（rw）</li>
+<li>C： 修改文件的属性</li>
+<li>D： 以上全不对</li>
+</ul>
+</li>
+</ul>
+<h1 id="-">网络嗅探及协议分析技术</h1>
+<ul>
+<li><strong>目标</strong><ul>
+<li>了解网络嗅探的基本含义</li>
+<li>了解tcpdump工具的基本用法</li>
+<li>掌握tcpdump工具抓包保存到文件的方法</li>
+<li>熟悉wireshark工具的基本用法</li>
+<li>掌握借助wireshark抓包工具分析简单网络协议的方法</li>
+</ul>
+</li>
+</ul>
+<h2 id="-">概述</h2>
+<p>  网络嗅探是一种常用的数据收集、分析的方法: </p>
+<p>  黑客常通过网络嗅探获取主机或网络的控制权，安全人员亦使用网络嗅探进行信息泄露和攻击行为分析。</p>
+<p>  嗅探所得数据，可以是用户的账号和密码，也可以是一些商用机密数据。</p>
+<p>  常用的工具包括tcpdump（命令行）、wireshark（图形界面）</p>
+<h2 id="tcpdump-">Tcpdump嗅探器</h2>
+<p>  tcpdump是一个用于捕获网络报文，并输出报文内容的工具。 </p>
+<p>  tcpdump 是一款功能强大的<strong>命令行</strong>嗅探（抓包）工具。</p>
+<p>  <a href="http://www.tcpdump.org/">Tcpdump项目官网</a>, 该项目除提供tcpdump工具外，还提供了一个用于网络流量捕获的c/c++库（可移植）, 可用于网络协议分析领域的二次开发。</p>
+<p>  tcpdump在windows的版本叫<strong>WinDUMP</strong>, </p>
+<h3 id="-">牛刀小试</h3>
+<ul>
+<li>基本用法</li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ sudo tcpdump  -i wlp2s0
+</code></pre>
+<p> <code>-i wlp2s0</code> , -i选项用来指定网络接口设备，wlp2s0 为我网络设备名称，你的电脑可能为eth0</p>
+<p>  <code>-v</code>、<code>-vv</code>， 选项用来显示更详细（繁琐）的输出</p>
+<p>  tcpdump的总的输出格式：<strong>系统时间 协议 源主机.端口 &gt; 目标主机.端口 数据包参数</strong></p>
+<ul>
+<li><p><strong>典型用法</strong></p>
+<p>tcpdump作为命令行抓包神器， 一般抓包保存，借助wireshark图形化协议分析工具进行分析网络包。 </p>
+<p><code>-w filename</code> ， 用于指定保存的文件</p>
+</li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ sudo tcpdump  -i wlp2s0   -w wlp2s0_2018.pcap
+tcpdump: listening on wlp2s0, link-type EN10MB (Ethernet), capture size 262144 bytes
+</code></pre>
+<p>添加 <code>-v</code>， 会显示抓取到的包数量，如下</p>
+<pre><code class="lang-bash">itcast@itcast $ sudo tcpdump  -i wlp2s0  -v -w wlp2s0_2018.pcap
+tcpdump: listening on wlp2s0, link-type EN10MB (Ethernet), capture size 262144 bytes
+Got 15
+</code></pre>
+<ul>
+<li><p>帮助信息</p>
+<p>man信息</p>
+</li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ man tcpdump
+</code></pre>
+<p> <code>-h</code> 选项，显示帮助信息</p>
+<pre><code class="lang-bash">itcast@itcast $ sudo tcpdump -h
+tcpdump version 4.9.2
+libpcap version 1.8.1
+OpenSSL 1.0.2l  25 May 2017
+Usage: tcpdump [-aAbdDefhHIJKlLnNOpqStuUvxX#] [ -B size ] [ -c count ]
+        [ -C file_size ] [ -E algo:secret ] [ -F file ] [ -G seconds ]
+        [ -i interface ] [ -j tstamptype ] [ -M secret ] [ --number ]
+        [ -Q in|out|inout ]
+        [ -r file ] [ -s snaplen ] [ --time-stamp-precision precision ]
+        [ --immediate-mode ] [ -T type ] [ --version ] [ -V file ]
+        [ -w file ] [ -W filecount ] [ -y datalinktype ] [ -z postrotate-command ]
+        [ -Z user ] [ expression ]
+</code></pre>
+<h3 id="-">高级过滤技巧</h3>
+<blockquote>
+<p> tcpdump作为一个命令行工具，可以包含过滤表达式（ filter expression），满足表达式的报文将会被捕获。 如没有给过滤表达式，则网络上所有的信息包将会被捕获。</p>
+</blockquote>
+<ul>
+<li>捕获特定主机的网络包（src， dst）<strong>host</strong></li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ sudo tcpdump -i wlp2s0 host 61.135.169.121
+</code></pre>
+<p>  <code>host 61.135.169.121</code> 获取源ip或者目标ip为<code>61.135.169.121</code>的网络数据包</p>
+<ul>
+<li>捕获特定源IP的网络包 <strong>src</strong></li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ sudo tcpdump -i wlp2s0 src 61.135.169.121
+11:32:09.605183 IP 61.135.169.121.https &gt; localhost.46000: Flags [.], ack 518, win 808, length 0
+。。。
+</code></pre>
+<ul>
+<li>捕获特定目标IP的网络包 <strong>dst</strong></li>
+</ul>
+<pre><code>itcast@itcast $ sudo tcpdump -i wlp2s0 dst  61.135.169.121 
+
+11:33:31.977839 IP localhost.46010 &gt; 61.135.169.121.https: Flags [.], ack 3076821759, win 237, length 0
+11:33:31.977858 IP localhost.46004 &gt; 61.135.169.121.https: Flags [.], ack 4115011400, win 237, length 0
+。。。
+</code></pre><ul>
+<li>捕获特定端口的网络包 <strong>port</strong></li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ sudo tcpdump -i wlp2s0 port 80
+</code></pre>
+<ul>
+<li>捕获特定协议的网络包 <strong>tcp/arp/udp/...</strong></li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ sudo tcpdump -i wlp2s0  host 172.16.28.100 and tcp
+</code></pre>
+<pre><code class="lang-bash">itcast@itcast $ sudo tcpdump -i wlp2s0  arp
+</code></pre>
+<ul>
+<li>帮助信息</li>
+</ul>
+<pre><code>itcast@itcast $ man pcap-filter
+</code></pre><p>补充： <strong>三种逻辑运算： 取非运算( ‘not &#39; or  &#39;! ‘)、 与运算(’and’ or，’&amp;&amp;&#39;)、 或运算(’or’  or  ‘||’)</strong></p>
+<!-- (3) 如果想要获取主机210.27.48.1除了和主机210.27.48.2之外所有主机通信的ip包，使用命令： -->
+<!-- #tcpdump ip host 210.27.48.1 and ! 210.27.48.2 -->
+<!-- (4) 如果想要获取主机192.168.228.246接收或发出的ssh包，并且不转换主机名使用如下命令： -->
+<!-- #tcpdump -nn -n src host 192.168.228.246 and port 22 and tcp -->
+<!-- (5) 获取主机192.168.228.246接收或发出的ssh包，并把mac地址也一同显示： -->
+<!-- # tcpdump -e src host 192.168.228.246 and port 22 and tcp -n -nn -->
+<!-- (6) 过滤的是源主机为192.168.0.1与目的网络为192.168.0.0的报头： -->
+<!-- tcpdump src host 192.168.0.1 and dst net 192.168.0.0/24 -->
+<!-- (7) 过滤源主机物理地址为XXX的报头： -->
+<!-- tcpdump ether src 00:50:04:BA:9B and dst…… -->
+<!-- （为什么ether src后面没有host或者net？物理地址当然不可能有网络喽）。 -->
+<!-- (8) 过滤源主机192.168.0.1和目的端口不是telnet的报头，并导入到tes.t.txt文件中： -->
+<!-- Tcpdump src host 192.168.0.1 and dst port not telnet -l > test.txt -->
+<!-- ip icmp arp rarp 和 tcp、udp、icmp这些选项等都要放到第一个参数的位置，用来过滤数据报的类型。 -->
+<!-- tcpdump采用命令行方式，它的命令格式为： -->
+<!-- tcpdump [-nn] [-i 接口] [-w 储存档名] [-c 次数] [-Ae] -->
+<!--                         [-qX] [-r 文件] [所欲捕获的数据内容] -->
+<!-- 参数： -->
+<!-- -nn，直接以 IP 及 Port Number 显示，而非主机名与服务名称。 -->
+<!-- -i，后面接要「监听」的网络接口，例如 eth0, lo, ppp0 等等的接口。 -->
+<!-- -w，如果你要将监听所得的数据包数据储存下来，用这个参数就对了。后面接文件名。 -->
+<!-- -c，监听的数据包数，如果没有这个参数， tcpdump 会持续不断的监听， -->
+<!--      直到用户输入 [ctrl]-c 为止。 -->
+<!-- -A，数据包的内容以 ASCII 显示，通常用来捉取 WWW 的网页数据包资料。 -->
+<!-- -e，使用资料连接层 (OSI 第二层) 的 MAC 数据包数据来显示。 -->
+<!-- -q，仅列出较为简短的数据包信息，每一行的内容比较精简。 -->
+<!-- -X，可以列出十六进制 (hex) 以及 ASCII 的数据包内容，对于监听数据包内容很有用。 -->
+<!-- -r，从后面接的文件将数据包数据读出来。那个「文件」是已经存在的文件， -->
+<!--      并且这个「文件」是由 -w 所制作出来的。 -->
+<!-- 所欲捕获的数据内容：我们可以专门针对某些通信协议或者是 IP 来源进行数据包捕获。 -->
+<!--      那就可以简化输出的结果，并取得最有用的信息。常见的表示方法有。 -->
+<!--     'host foo', 'host 127.0.0.1' ：针对单台主机来进行数据包捕获。 -->
+<!--      'net 192.168' ：针对某个网段来进行数据包的捕获。 -->
+<!--      'src host 127.0.0.1' 'dst net 192.168'：同时加上来源(src)或目标(dst)限制。 -->
+<!--      'tcp port 21'：还可以针对通信协议检测，如tcp、udp、arp、ether 等。 -->
+<!--      除了这三种类型的关键字之外，其他重要的关键字如下：gateway, broadcast,less, -->
+<!-- greater,还有三种逻辑运算，取非运算是 'not ' '! ', 与运算是'and','&&';或运算 是'o -->
+<!-- r' ,'||'； -->
+<!-- 范例一：以 IP 与 Port Number 捉下 eth0 这个网卡上的数据包，持续 3 秒 -->
+<!-- [root@linux ~]# tcpdump -i eth0 -nn -->
+<!-- tcpdump: verbose output suppressed, use -v or -vv for full protocol decode -->
+<!-- listening on eth0, link-type EN10MB (Ethernet), capture size 96 bytes -->
+<!-- 01:33:40.41 IP 192.168.1.100.22 > 192.168.1.11.1190: P 116:232(116) ack 1 win -->
+<!-- 9648 -->
+<!-- 01:33:40.41 IP 192.168.1.100.22 > 192.168.1.11.1190: P 232:364(132) ack 1 win -->
+<!-- 9648 -->
+<!-- <==按下 [ctrl]-c 之后结束 -->
+<!-- 6680 packets captured              <==捉取下来的数据包数量 -->
+<!-- 14250 packets received by filter   <==由过滤所得的总数据包数量 -->
+<!-- 7512 packets dropped by kernel     <==被核心所丢弃的数据包 -->
+<!-- 至于那个在范例一所产生的输出中，我们可以大概区分为几个字段，现以范例一当中那行特殊字体行来说明一下： -->
+<!-- · 01:33:40.41：这个是此数据包被捕获的时间，“时:分:秒”的单位。 -->
+<!-- · IP：通过的通信协议是IP。 -->
+<!-- · 192.168.1.100.22>：传送端是192.168.1.100这个IP，而传送的Port Number为22，那个大于（>）的符号指的是数据包的传输方向。 -->
+<!-- · 192.168.1.11.1190：接收端的IP是192.168.1.11，且该主机开启port 1190来接收。 -->
+<!-- · P 116:232(116)：这个数据包带有PUSH的数据传输标志，且传输的数据为整体数据的116~232 Byte，所以这个数据包带有116 Bytes的数据量。 -->
+<!-- · ack 1 win 9648：ACK与Window size的相关资料。 -->
+<!-- 最简单的说法，就是该数据包是由192.168.1.100传到192.168.1.11，通过的port是由22到1190，且带有116 Bytes的数据量，使用的是PUSH的标记，而不是SYN之类的主动联机标志。 -->
+<!-- 接下来，在一个网络状态很忙的主机上面，你想要取得某台主机对你联机的数据包数据时，使用tcpdump配合管线命令与正则表达式也可以，不过，毕竟不好捕获。我们可以通过tcpdump的表达式功能，就能够轻易地将所需要的数据独立的取出来。在上面的范例一当中，我们仅针对eth0做监听，所以整个eth0接口上面的数据都会被显示到屏幕上，但这样不好分析，可以简化吗？例如，只取出port 21的联机数据包，可以这样做： -->
+<!-- [root@linux ~]# tcpdump -i eth0 -nn port 21 -->
+<!-- tcpdump: verbose output suppressed, use -v or -vv for full protocol decode -->
+<!-- listening on eth0, link-type EN10MB (Ethernet), capture size 96 bytes -->
+<!-- 01:54:37.96 IP 192.168.1.11.1240 > 192.168.1.100.21:. ack 1 win 65535 -->
+<!-- 01:54:37.96 IP 192.168.1.100.21 > 192.168.1.11.1240:P 1:21(20) ack 1 win 5840 -->
+<!-- 01:54:38.12 IP 192.168.1.11.1240 > 192.168.1.100.21:. ack 21 win 65515 -->
+<!-- 01:54:42.79 IP 192.168.1.11.1240 > 192.168.1.100.21:P 1:17(16) ack 21 win 65515 -->
+<!-- 01:54:42.79 IP 192.168.1.100.21 > 192.168.1.11.1240: . ack 17 win 5840 -->
+<!-- 01:54:42.79 IP 192.168.1.100.21 > 192.168.1.11.1240: P 21:55(34) ack 17 win 5840 -->
+<!-- 看！这样就仅取出port 21的信息，如果仔细看的话，你会发现数据包的传递都是双向的，Client端发出请求而Server端则予以响应，所以，当然是有去有回了。而我们也就可以经过这个数据包的流向来了解到数据包运动的过程了。例如： -->
+<!-- · 我们先在一个终端机窗口输入“tcpdump-i lo-nn”的监听。 -->
+<!-- · 再另开一个终端机窗口来对本机（127.0.0.1）登录“ssh localhost”，那么输出的结果会是如何？ -->
+<!-- [root@linux ~]# tcpdump -i lo -nn -->
+<!--  1 tcpdump: verbose output suppressed, use -v or -vv for full protocol decode -->
+<!--  2 listening on lo, link-type EN10MB (Ethernet), capture size 96 bytes -->
+<!--  3 11:02:54.253777 IP 127.0.0.1.32936 >  -->
+<!-- 127.0.0.1.22: S 933696132:933696132(0)  -->
+<!--    win 32767  -->
+<!--  4 11:02:54.253831 IP 127.0.0.1.22 > 127.0.0.1.32936:  -->
+<!-- S 920046702:920046702(0)  -->
+<!--    ack 933696133 win 32767  -->
+<!--  5 11:02:54.253871 IP 127.0.0.1.32936 > 127.0.0.1.22: . ack 1 win 8192  -->
+<!--  6 11:02:54.272124 IP 127.0.0.1.22 > 127.0.0.1.32936:  -->
+<!-- P 1:23(22) ack 1 win 8192  -->
+<!--  7 11:02:54.272375 IP 127.0.0.1.32936 > 127.0.0.1.22: . ack 23 win 8192 -->
+<!-- 代码显示的头两行是tcpdump的基本说明，然后： -->
+<!-- · 第3行显示的是来自Client端带有SYN主动联机的数据包。 -->
+<!-- · 第4行显示的是来自Server端，除了响应Client端之外（ACK），还带有SYN主动联机的标志。 -->
+<!-- · 第5行则显示Client端响应Server确定联机建立（ACK）。 -->
+<!-- · 第6行以后则开始进入数据传输的步骤。 -->
+<!-- 从第3~5行的流程来看，熟不熟悉啊？没错。那就是3次握手的基础流程，有趣吧。不过tcpdump之所以被称为黑客软件之一远不止上面介绍的功能。上面介绍的功能可以用来作为我们主机的数据包联机与传输的流程分析，这将有助于我们了解到数据包的运作，同时了解到主机的防火墙设置规则是否有需要修订的地方。 -->
+<!-- 还有更神奇的用法。当我们使用tcpdump在Router上面监听明文的传输数据时，例如FTP传输协议，你觉得会发生什么问题呢？我们先在主机端执行“tcpdump -i lo port 21 -nn –X”，然后再以FTP登录本机，并输入账号与密码，结果你就可以发现如下的状况： -->
+<!-- [root@linux ~]# tcpdump -i lo -nn -X 'port 21' -->
+<!--     0x0000:  4500 0048 2a28 4000 4006 1286 7f00 0001  E..H*(@.@....... -->
+<!--     0x0010:  7f00 0001 0015 80ab 8355 2149 835c d825  .........U!I.\.% -->
+<!--     0x0020:  8018 2000 fe3c 0000 0101 080a 0e2e 0b67  .....<.........g -->
+<!--     0x0030:  0e2e 0b61 3232 3020 2876 7346 5450 6420  ...a220.(vsFTPd. -->
+<!--     0x0040:  322e 302e 3129 0d0a                      2.0.1).. -->
+<!--     0x0000:  4510 0041 d34b 4000 4006 6959 7f00 0001  E..A.K@.@.iY.... -->
+<!--     0x0010:  7f00 0001 80ab 0015 835c d825 8355 215d  .........\.%.U!] -->
+<!--     0x0020:  8018 2000 fe35 0000 0101 080a 0e2e 1b37  .....5.........7 -->
+<!--     0x0030:  0e2e 0b67 5553 4552 2064 6d74 7361 690d  ...gUSER.dmtsai. -->
+<!--     0x0040:  0a                                       . -->
+<!--     0x0000:  4510 004a d34f 4000 4006 694c 7f00 0001  E..J.O@.@.iL.... -->
+<!--     0x0010:  7f00 0001 80ab 0015 835c d832 8355 217f  .........\.2.U!. -->
+<!--     0x0020:  8018 2000 fe3e 0000 0101 080a 0e2e 3227  .....>........2' -->
+<!--     0x0030:  0e2e 1b38 5041 5353 206d 7970 6173 7377  ...8PASS.mypassw -->
+<!--     0x0040:  6f72 6469 7379 6f75 0d0a                 ordisyou.. -->
+<!-- 上面的输出结果已经被简化过了，你需要自行在你的输出结果中搜索相关的字符串才行。从上面输出结果的特殊字体中，我们可以发现该FTP软件使用的是 vsFTPd，并且用户输入dmtsai这个账号名称，且密码是mypasswordisyou。如果使用的是明文方式来传输你的网络数据呢？ -->
+<!-- 另外你得了解，为了让网络接口可以让tcpdump监听，所以执行tcpdump时网络接口会启动在“混杂模式（promiscuous）”，所以你会在 /var/log/messages里面看到很多的警告信息，通知你说你的网卡被设置成为混杂模式。别担心，那是正常的。至于更多的应用，请参考man tcpdump了。 -->
+<!-- 例题：如何使用tcpdump监听来自eth0适配卡且通信协议为port 22，目标来源为192.168.1.100的数据包资料？ -->
+<!-- 答：tcpdump -i eth0 -nn 'port 22 and src host 192.168.1.100'。 -->
+<!-- ##############例子2####################################### -->
+<!-- 普通情况下，直接启动tcpdump将监视第一个网络界面上所有流过的数据包。 -->
+<!-- # tcpdump -->
+<!-- tcpdump: listening on fxp0 -->
+<!-- 11:58:47.873028 202.102.245.40.netbios-ns > 202.102.245.127.netbios-ns: udp 50 -->
+<!-- 11:58:47.974331 0:10:7b:8:3a:56 > 1:80:c2:0:0:0 802.1d ui/C len=43 -->
+<!-- 0000 0000 0080 0000 1007 cf08 0900 0000 -->
+<!-- 0e80 0000 902b 4695 0980 8701 0014 0002 -->
+<!-- 000f 0000 902b 4695 0008 00 -->
+<!-- 11:58:48.373134 0:0:e8:5b:6d:85 > Broadcast sap e0 ui/C len=97 -->
+<!-- ffff 0060 0004 ffff ffff ffff ffff ffff -->
+<!-- 0452 ffff ffff 0000 e85b 6d85 4008 0002 -->
+<!-- 0640 4d41 5354 4552 5f57 4542 0000 0000 -->
+<!-- 0000 00 -->
+<!-- 使用-i参数指定tcpdump监听的网络界面，这在计算机具有多个网络界面时非常有用， -->
+<!-- 使用-c参数指定要监听的数据包数量， -->
+<!-- 使用-w参数指定将监听到的数据包写入文件中保存 -->
+<!-- A想要截获所有210.27.48.1 的主机收到的和发出的所有的数据包： -->
+<!-- #tcpdump host 210.27.48.1 -->
+<!-- B想要截获主机210.27.48.1 和主机210.27.48.2 或210.27.48.3的通信，使用命令：（在命令行中适用　　　括号时，一定要 -->
+<!-- #tcpdump host 210.27.48.1 and \ (210.27.48.2 or 210.27.48.3 \) -->
+<!-- C如果想要获取主机210.27.48.1除了和主机210.27.48.2之外所有主机通信的ip包，使用命令： -->
+<!-- #tcpdump ip host 210.27.48.1 and ! 210.27.48.2 -->
+<!-- D如果想要获取主机210.27.48.1接收或发出的telnet包，使用如下命令： -->
+<!-- #tcpdump tcp port 23 host 210.27.48.1 -->
+<!-- E 对本机的udp 123 端口进行监视 123 为ntp的服务端口 -->
+<!-- # tcpdump udp port 123 -->
+<!-- F 系统将只对名为hostname的主机的通信数据包进行监视。主机名可以是本地主机，也可以是网络上的任何一台计算机。下面的命令可以读取主机hostname发送的所有数据： -->
+<!-- #tcpdump -i eth0 src host hostname -->
+<!-- G 下面的命令可以监视所有送到主机hostname的数据包： -->
+<!-- #tcpdump -i eth0 dst host hostname -->
+<!-- H 我们还可以监视通过指定网关的数据包： -->
+<!-- #tcpdump -i eth0 gateway Gatewayname -->
+<!-- I 如果你还想监视编址到指定端口的TCP或UDP数据包，那么执行以下命令： -->
+<!-- #tcpdump -i eth0 host hostname and port 80 -->
+<!-- J 如果想要获取主机210.27.48.1除了和主机210.27.48.2之外所有主机通信的ip包 -->
+<!-- ，使用命令： -->
+<!-- #tcpdump ip host 210.27.48.1 and ! 210.27.48.2 -->
+<!-- K 想要截获主机210.27.48.1 和主机210.27.48.2 或210.27.48.3的通信，使用命令 -->
+<!-- ：（在命令行中适用　　　括号时，一定要 -->
+<!-- #tcpdump host 210.27.48.1 and \ (210.27.48.2 or 210.27.48.3 \) -->
+<!-- L 如果想要获取主机210.27.48.1除了和主机210.27.48.2之外所有主机通信的ip包，使用命令： -->
+<!-- #tcpdump ip host 210.27.48.1 and ! 210.27.48.2 -->
+<!-- M 如果想要获取主机210.27.48.1接收或发出的telnet包，使用如下命令： -->
+<!-- #tcpdump tcp port 23 host 210.27.48.1 -->
+<!-- 第三种是协议的关键字，主要包括fddi,ip ,arp,rarp,tcp,udp等类型 -->
+<!-- 除了这三种类型的关键字之外，其他重要的关键字如下：gateway, broadcast,less, -->
+<!-- greater,还有三种逻辑运算，取非运算是 ‘not ‘ ‘! ‘, 与运算是‘and‘,‘&&‘;或运算 是‘o -->
+<!-- r‘ ,‘||‘； -->
+<!-- 第二种是确定传输方向的关键字，主要包括src , dst ,dst or src, dst and src , -->
+<!-- 如果我们只需要列出送到80端口的数据包，用dst port；如果我们只希望看到返回80端口的数据包，用src port。 -->
+<!-- #tcpdump –i eth0 host hostname and dst port 80 目的端口是80 -->
+<!-- 或者 -->
+<!-- #tcpdump –i eth0 host hostname and src port 80 源端口是80 一般是提供http的服务的主机 -->
+<!-- 如果条件很多的话 要在条件之前加and 或 or 或 not -->
+<!-- #tcpdump -i eth0 host ! 211.161.223.70 and ! 211.161.223.71 and dst port 80 -->
+<!-- 如果在ethernet 使用混杂模式 系统的日志将会记录 -->
+<!-- May 7 20:03:46 localhost kernel: eth0: Promiscuous mode enabled. -->
+<!-- May 7 20:03:46 localhost kernel: device eth0 entered promiscuous mode -->
+<!-- May 7 20:03:57 localhost kernel: device eth0 left promiscuous mode -->
+<!-- tcpdump对截获的数据并没有进行彻底解码，数据包内的大部分内容是使用十六进制的形式直接打印输出的。显然这不利于分析网络故障，通常的解决办法是先使用带-w参数的tcpdump 截获数据并保存到文件中，然后再使用其他程序进行解码分析。当然也应该定义过滤规则，以避免捕获的数据包填满整个硬盘。 -->
+<!-- 除了过滤语句，还有一个很重要的参数，也就是说，如果这个参数不设置正确，会导致包数据的丢失！ -->
+<!-- 它就是-s 参数，snaplen, 也就是数据包的截取长度，仔细看man就会明白的！默认截取长度为60个字节，但一般ethernet MTU都是1500字节。所以，要抓取大于60字节的包时，使用默认参数就会导致包数据丢失！ -->
+<!-- 只要使用-s 0就可以按包长，截取数据！ -->
+<h3 id="-">附录</h3>
+<pre><code>Panda.Guo@2018-04-27 16:15:09 $ man tcpdump
+</code></pre><pre><code>-A 以ASCII格式打印出所有分组，并将链路层的头最小化。
+-c 在收到指定的数量的分组后，tcpdump就会停止。
+-C 在将一个原始分组写入文件之前，检查文件当前的大小是否超过了参数file_size 中指定的大小。
+    如果超过了指定大小，则关闭当前文件，然后在打开一个新的文件。
+    参数 file_size 的单位是兆字节（是1,000,000字节，而不是1,048,576字节）。
+
+-d 将匹配信息包的代码以人们能够理解的汇编格式给出。
+-dd 将匹配信息包的代码以c语言程序段的格式给出。
+-ddd 将匹配信息包的代码以十进制的形式给出。
+-D 打印出系统中所有可以用tcpdump截包的网络接口。
+-e 在输出行打印出数据链路层的头部信息。
+-E 用spi@ipaddr algo:secret解密那些以addr作为地址，并且包含了安全参数索引值spi的IPsec ESP分组。
+-f 将外部的Internet地址以数字的形式打印出来。
+-F 从指定的文件中读取表达式，忽略命令行中给出的表达式。
+-i 指定监听的网络接口。
+-l 使标准输出变为缓冲行形式，可以把数据导出到文件。
+-L 列出网络接口的已知数据链路。
+-m 从文件module中导入SMI MIB模块定义。该参数可以被使用多次，以导入多个MIB模块。
+-M 如果tcp报文中存在TCP-MD5选项，则需要用secret作为共享的验证码用于验证TCP-MD5选选项摘要（详情可参考RFC 2385）。
+-b 在数据-链路层上选择协议，包括ip、arp、rarp、ipx都是这一层的。
+-n 不把网络地址转换成名字。
+-nn 不进行端口名称的转换。
+-N 不输出主机名中的域名部分。例如，‘nic.ddn.mil‘只输出’nic‘。
+-t 在输出的每一行不打印时间戳。
+-O 不运行分组分组匹配（packet-matching）代码优化程序。
+-P 不将网络接口设置成混杂模式。
+-q 快速输出。只输出较少的协议信息。
+-r 从指定的文件中读取包(这些包一般通过-w选项产生)。
+-S 将tcp的序列号以绝对值形式输出，而不是相对值。
+-s 从每个分组中读取最开始的snaplen个字节，而不是默认的68个字节。
+-T 将监听到的包直接解释为指定的类型的报文，常见的类型有rpc远程过程调用）和snmp（简单网络管理协议；）。
+-t 不在每一行中输出时间戳。
+-tt 在每一行中输出非格式化的时间戳。
+-ttt 输出本行和前面一行之间的时间差。
+-tttt 在每一行中输出由date处理的默认格式的时间戳。
+-u 输出未解码的NFS句柄。
+-v 输出一个稍微详细的信息，例如在ip包中可以包括ttl和服务类型的信息。
+-vv 输出详细的报文信息。
+-w 直接将分组写入文件中，而不是不分析并打印出来。
+</code></pre><h2 id="wireshark-">Wireshark 网络协议分析工具</h2>
+<blockquote>
+<p>Wireshark（前身Ethereal）是一个网络报文分析工具。 网络封包分析软件的功能是撷取网络封包，并尽可能显示出最为详细的网络封包资料。 2006年6月，因为商标的问题，Ethereal更名为Wireshark。</p>
+</blockquote>
+<p> <a href="https://www.wireshark.org/">wireshark 官网</a></p>
+<h3 id="-">基本用法</h3>
+<blockquote>
+<p>按照国际惯例，从最基本的程序启动说起。</p>
+</blockquote>
+<p><strong>开启抓包</strong></p>
+<p> 启动wireshark程序后， 在在接口列表中选择接口名称（见下图中标识1），然后点击“开始捕获分组”（见下图标识2）在此接口上抓包。 本例选取enp8s0， 具体因电脑网卡不同而异， 关于enp8s0的含义，后续我写一篇网文做一正式说明。</p>
+<p><img src="images/0402-wireshark-start.png" alt="Wireshark启动">
+<!-- ![][] --></p>
+<p><strong>报文捕获窗口</strong></p>
+<p> 选取接口名称并点击开始捕获之后，就可以看到实时接收的报文。Wireshark会捕捉系统发送和接收的每一个报文。如果抓取的接口是无线并且选项选取的是混合模式，那么也会看到网络上其他报文。</p>
+<p> 接下来再界面我们可以看到wireshark抓到的实时数据包。我们对数据包的各个字段进行解释。</p>
+<ul>
+<li>No:代表数据包标号。</li>
+<li>Time：在软件启动的多长时间内抓到。</li>
+<li>Source：来源ip。</li>
+<li>Destination: 目的ip。</li>
+<li>Protocol：协议。</li>
+<li>Length:数据包长度。</li>
+<li>info：数据包信息。</li>
+</ul>
+<p><img src="images/0402-wireshark-window-function.png" alt="报文捕获窗口功能"></p>
+<p>  在上面wireshark抓包窗口中，可以简单分割成三个小窗口，上部窗口每一行对应一个网络报文，点击某一行可以在下面两个窗口看到更多信息。中间窗口描述的是报文里面每一层的详细信息。底 部窗口以十六进制和ASCII码的方式列出报文内容。</p>
+<p><strong>停止抓包</strong></p>
+<p>在抓包过程中，我们随时可以点击图标停止或启动。来停止或者启动抓取数据包。
+<img src="images/0402-wireshark-stop_start.png" alt="起停抓包"></p>
+<p> 在上图中，标识2的地方， 为停止抓取数据包， 标识3的地方，为再次启动抓取数据包。</p>
+<h3 id="-">报文过滤及分析</h3>
+<blockquote>
+<p> 报文过滤，是wireshark出彩的地方，也是网络协议的分析的重要工作步骤</p>
+</blockquote>
+<p>在下图方框中，输入相应的源ip、目的ip、协议等等表达式，点击箭头部分，在窗口中即可显示过滤后的数据包。</p>
+<div align=center>
+  <img width="640" height="480" src="./images/0402-wireshark-fillter.png" />
+</div>
+
+<ul>
+<li><p>典型IP地址过滤表达式</p>
+<ul>
+<li>ip.src==172.16.28.102 : 指定源IP</li>
+<li>ip.dst==192.168.0.111 ： 指定目标IP</li>
+<li>ip.addr == 192.0.2.1 : 指定IP，（不区分源和目标IP）</li>
+<li>ip.src==192.168.43.167 and ip.dst==223.166.152.109  ： 指定源ip <strong>并且</strong>目标IP</li>
+<li>ip.src==192.168.43.167 or ip.dst==223.166.152.109 ： 指定源ip <strong>或者</strong>目标IP</li>
+</ul>
+</li>
+<li><p>典型端口过滤表达式</p>
+<ul>
+<li>tcp.port ==52304</li>
+<li>tcp.dstport==30</li>
+<li>tcp.srcport==52304</li>
+<li>udp.....</li>
+</ul>
+</li>
+<li><p>典型网络协议过滤表达式</p>
+<ul>
+<li>telnet</li>
+<li>tcp</li>
+<li>udp</li>
+<li>。。。。</li>
+</ul>
+</li>
+</ul>
+<h3 id="-">网络嗅探实战</h3>
+<ul>
+<li><p>目标： 通过抓取telnet网络报文， 分析并获取用户登录口令</p>
+<p> telnet 登录典型命令<code>telnet 目标主机ip -l 用户名</code> ， 在Password后输入口令，</p>
+</li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ telnet 127.0.0.1 -l itcast
+Trying 127.0.0.1...
+Connected to 127.0.0.1.
+Escape character is &#39;^]&#39;.
+Password: 
+---&gt; 输入口令
+
+Last login: Thu Sep  6 18:19:01 CST 2018 from localhost on pts/1
+。。。。。。
+</code></pre>
+<ul>
+<li><p>补充 </p>
+<p>安装telnet和telnetd服务</p>
+</li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ sudo apt-get install telnet telnetd
+</code></pre>
+<h3 id="-">补充： 普通用户抓包配置</h3>
+<ul>
+<li>添加wireshark用户组。</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-27 10:08:46 $  groupadd wireshark
+Panda.Guo@2018-04-27 10:07:30 $ sudo cat /etc/group | grep &quot;wireshark&quot;
+wireshark:x:128
+</code></pre><ul>
+<li>添加当前用户(我的为panda，具体根据情况决定)到wireshark组</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-27 10:12:23 $ sudo usermod -aG wireshark panda
+Panda.Guo@2018-04-27 10:13:05 $ sudo cat /etc/group | grep &quot;wireshark&quot;
+wireshark:x:128:panda
+</code></pre><ul>
+<li>将dumpcap更改为wireshark用户组 </li>
+</ul>
+<pre><code>Panda.Guo@2018-04-27 10:16:08 $ ls -l /usr/bin/dumpcap 
+-rwxr-xr-- 1 root root  96464 Jan 23 01:03 /usr/bin/dumpcap
+Panda.Guo@2018-04-27 10:15:00 $ sudo chmod  root:wireshark /usr/bin/dumpcap
+Panda.Guo@2018-04-27 10:16:23 $ ls -l /usr/bin/dumpcap 
+-rwxr-xr-- 1 root wireshark 96464 Jan 23 01:03 /usr/bin/dumpcap
+</code></pre><ul>
+<li>设置 setuid (root), 使普通用户执行具备root用户权限，或者添加能力</li>
+</ul>
+<p>方法一：setuid root</p>
+<pre><code>Panda.Guo@2018-04-27 10:19:16 $ sudo chmod 4754 /usr/bin/dumpcap
+Panda.Guo@2018-04-27 10:19:34ls -l /usr/bin/dumpcap 
+-rwsr-xr-- 1 root wireshark 96464 Jan 23 01:03 /usr/bin/dumpcap
+</code></pre><p>方法二：添加能力</p>
+<pre><code>Panda.Guo@2018-04-27 10:20:39 $ sudo setcap  &quot;cap_net_admin,cap_net_raw+eip&quot; /usr/bin/dumpcap
+Panda.Guo@2018-04-27 10:21:28sudo getcap /usr/bin/dumpcap 
+/usr/bin/dumpcap = cap_net_admin,cap_net_raw+eip
+</code></pre><h2 id="-">知识拓展</h2>
+<ul>
+<li><p><strong>网络嗅探的工作原理</strong></p>
+<p>所有网络接口都有一个硬件地址(MAC)，用于区别其他网络设备。</p>
+<p>在正常情况下，一个合法的网络接口应该只能响应属于自己的网络数据。</p>
+<p>然而，当将本地网卡设置成<strong>混杂状态</strong>时，它将对所有网络数据进行响应。</p>
+<p>由于嗅探器工作于网络环境的底层（链路层），它能够拦截所有在网络上传送的数据，再通过相应的软件工具，就可以实时分析这些数据的内容。</p>
+</li>
+</ul>
+<ul>
+<li><p><strong>交换网络</strong></p>
+<p>在共享网络中，把网卡设为<strong>混杂模式</strong>就可以<strong>监听所有的网络数据包</strong>，但是在交换网络中，情况就发生了变化。</p>
+<p>以太网分为共享式以太网和交换式以太网: </p>
+<p>共享式以太网通常以<strong>集线器</strong>作为网络设备，交换式以太网通常使用<strong>交换机</strong>作为网络连接设备。</p>
+<p>共享式以太网中数据帧以广播方式传送到每个以太网端口，网内每台主机的网卡能接收到网内的所有数据帧。因此只要把网卡设置成为混杂模式就可以获取到这本地网卡的所有数据帧。</p>
+<p>最典型的交换网络使用交换机连接，在交换机中可以设为一个端口一个MAC地址，形成一个端口对应一个MAC地址对。这样当网络数据包到达端口时，而不是转发给所有的端口，只是<strong>转发MAC对应的端口</strong>。这样，其他端口的通讯不受干扰，所以其他端口上的主机就无法接收到网络上的数据包了。</p>
+</li>
+</ul>
+<p> <strong>Tips</strong>：从网络嗅探角度看，交换机连接网络，比hub连接网络要安全。</p>
+<ul>
+<li><p><strong>数据包在局域网内的传输方式</strong></p>
+<p>众所周知，数据包在互联网上的传播是根据IP地址进行寻址的，但是完整的过程并非如此。数据包通过IP地址可以达到的最远的地点就是目标主机所在的子网，而在该子网内的寻址却是使用物理地址的，即MAC地址。</p>
+<p>数据包被传送到目标主机所在的子网时，如果该子网为<strong>共享式网络</strong>（由集线器连接），数据包将被广播方式传播出去，这意味着该子网内的所有主机都可以接收到该数据包。当主机接收到数据包后通常会先检查其目的MAC地址，如果目的MAC地址不是自己，那么就是丢弃，只有目的MAC地址为自己的数据包才会将其交付给上一层处理。</p>
+<p>Sniffer将网卡设置为混杂模式，这样就可以接收到所有的数据包了，达到了嗅探了目的。</p>
+<p>（如果为交换网络，则根据MAC地址转发到相应主机，当MAC地址为FFFFFFFFFF...全1时广播）。</p>
+<p>上述内容待确认。</p>
+</li>
+<li><p><strong>设置网卡混杂模式</strong></p>
+<p>网卡当前是否是<strong>混杂模式</strong>， 关键通过ifconfig命令，查看flags项中，是否有<strong>PROMISC</strong>.</p>
+</li>
+</ul>
+<pre><code class="lang-bash">#设置混杂模式(其中enp8s0为你的网络接口名称，视具体而定)
+itcast@itcast $ sudo ifconfig enp8s0 promisc
+itcast@itcast $ sudo ifconfig enp8s0 
+enp8s0: flags=4355&lt;UP,BROADCAST,PROMISC,MULTICAST&gt;  mtu 1500
+        ether e0:db:55:f0:07:d0  txqueuelen 1000  (Ethernet)
+        RX packets 0  bytes 0 (0.0 B)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 0  bytes 0 (0.0 B)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+        device interrupt 16  
+
+#取消混杂模式
+itcast@itcast $ sudo ifconfig enp8s0 -promisc
+itcast@itcast $ sudo ifconfig enp8s0 
+enp8s0: flags=4099&lt;UP,BROADCAST,MULTICAST&gt;  mtu 1500
+        ether e0:db:55:f0:07:d0  txqueuelen 1000  (Ethernet)
+        RX packets 0  bytes 0 (0.0 B)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 0  bytes 0 (0.0 B)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+        device interrupt 16  
+</code></pre>
+<h2 id="-">随堂练习</h2>
+<ul>
+<li>对tcpdump嗅探（抓包）工具的应用，通常用tcpdump进行抓包， 保存为pcap文件，再借助wireshark工具进行分析。 那么在tcpdump工具中，用来写入pcap文件的选项是： （单选）<ul>
+<li>A：-w</li>
+<li>B：-f</li>
+<li>C：-o</li>
+<li>D： 以上都可以 </li>
+</ul>
+</li>
+</ul>
+<h1 id="linux-">Linux 主机防火墙</h1>
+<ul>
+<li><p><strong> 目标 </strong></p>
+<ul>
+<li>了解Linux 主机防火墙的基本概念 </li>
+<li>了解iptables的规则的基本构成</li>
+<li>掌握 iptables限制特定网络访问主机</li>
+<li>了解tcpwraper的应用场景</li>
+<li>掌握tcpwraper限制特定IP访问主机ssh服务的方法</li>
+</ul>
+</li>
+</ul>
+<h2 id="-">介绍</h2>
+<p> 防火墙（Firewall），也称防护墙，是由Check Point创立者Gil Shwed于1993年发明并引入国际互联网（US5606668（A）1993-12-15）。</p>
+<p>  它是一种位于内部网络与外部网络之间的网络安全系统。一项信息安全的防护系统。<strong>按照给定的规则，允许或者限制网络报文通过</strong>。</p>
+<p> 本次课程重点介绍通过iptables工具添加“规则”， （主机防火墙由用户态iptables工具+内核态netfilter模块实现）</p>
+<p> TcpWrapper 也可以达到<strong>“允许或是限制网络报文通过”</strong>的目标。一般称作轻量级防火墙，应用简单。</p>
+<!-- 一些基本概念： -->
+<!--  从逻辑上讲， 防火墙可分为主机防火墙和网络防火墙， 我们本章介绍的是主机防火墙 -->
+<!--  从物理上讲， 防火墙可分为硬件防火墙和软件防火墙，我们本章介绍的属于软件防火墙 -->
+<p> <img src="images/07.03-防火墙.png" alt="防火墙"></p>
+<h2 id="iptables-">Iptables 主机防火墙</h2>
+<blockquote>
+<p>先看几个概念</p>
+</blockquote>
+<h3 id="4-5-n-">4表5链N规则</h3>
+<ul>
+<li><strong>基本概念</strong></li>
+</ul>
+<p>我们先看， 当客户端浏览器访问web服务器时， 一个客户端的数据报文和服务器的交互流程可简单如下图所示：</p>
+<p><img src="images/07.04-数据包简单流程.png" alt="报文简单交互流程"></p>
+<p>  为了使防火墙达到“防火”（包过滤）的目的， 我们需要在数据报文流经的路径上，设置一下<strong>关卡</strong>： 所有进出的报文都流经这些<strong>关卡</strong>， 在“<strong>关卡</strong>”上设置“<strong>条件</strong>”， 报文经检查后，符合放行<strong>条件</strong>的才放行, 符合阻拦<strong>条件</strong>的报文被阻止。</p>
+<p>  这些<strong>关卡</strong>，在iptables中称之为<strong>链</strong>， 这些<strong>条件</strong>，我们称之为<strong>规则</strong>， 所谓的配置防火墙，就是在相应的<strong>链</strong>中添加<strong>规则</strong>。</p>
+<ul>
+<li><p><strong>5链</strong></p>
+<p>所谓<strong>5链</strong>， 就是linux系统设置了5道<strong>关卡</strong>，分别对应于：  “输入”（INPUT）、“输出”（OUTPUT）、“路由前”（PREROUTING）、“转发”(FORWARD)、“路由后”(POSTROUTING)</p>
+<p>一个数据报文的完整场景如下图所示：</p>
+<p><img src="images/07.05-数据包流经完整场景.png" alt="完整场景"></p>
+<p>根据实际的场景，数据报文的流向:</p>
+<p> （外网）到本机的报文： PREROUTING -&gt; INPUT</p>
+<p>  由本机（路由器）转发的报文： PREROUTING -&gt; FORWARD -&gt; POSTROUTING</p>
+<p> 本机进程发出的报文： OUTPUT -&gt;  POSTROUTING</p>
+</li>
+</ul>
+<ul>
+<li><p>链和规则的关系</p>
+<p>我们把“<strong>关卡</strong>”称之为<strong>链</strong>， 在<strong>关卡</strong>中我们设置<strong>规则</strong>， 还可以设置多条<strong>规则</strong>， 当我们把多条<strong>规则</strong>串到一起的时候，就形成了<strong>链</strong>。 </p>
+<p><img src="images/07.06-链和规则.png" alt="链和规则"></p>
+<p><strong>防火墙的作用呢，就是对经过的报文匹配“规则”， 然后执行对应的操作（放行、阻拦）</strong></p>
+</li>
+</ul>
+<ul>
+<li><p><strong>4表</strong></p>
+<p><strong>表</strong>， 为了实现特定的功能，需要在几个不同的<strong>关卡</strong>中配置相应的<strong>规则</strong>，这几个不同关卡就合称<strong>表</strong>。</p>
+<p>系统内置4个表：</p>
+<p><strong>filer： 数据包过滤， INPUT、FORWARD、OUTPUT </strong> </p>
+<p>nat: 网络地址转换（映射），PREROUTING、INPUT、OUTPUT、POSTROUTING</p>
+<p>managle： 报文拆解，修改报文并重新封装：PREROUTING、INPUT、FORWARD、OUTPUT、POSTROUTING</p>
+<p>raw：关闭链接追踪机制等：PREROUTING、INPUT、OUTPUT</p>
+<p>（新版内核中增加内置表 security）</p>
+</li>
+</ul>
+<ul>
+<li>4表-5链-规则总结</li>
+</ul>
+<blockquote>
+<p>表、链、 规则之间的关系，见下图</p>
+</blockquote>
+<p> <img src="images/07.07-表-链-规则.png" alt="表、链、规则"></p>
+<!--  * **数据流经防火墙的流程 -- 参考** -->
+<!--  一个数据报文流经防火墙的流程如下图所示：、-->
+<!--  ![数据报文流程](images/07.02-数据包流经防火墙流程.png) -->
+<h3 id="iptables-">iptables基本用法</h3>
+<blockquote>
+<p>添加一条规则的写法</p>
+</blockquote>
+<p>  格式： iptables [-t table] COMMAND chain CRETERIA -j TARGET</p>
+<ul>
+<li><p>-t table ：  4表, 默认filter</p>
+<ul>
+<li>filter</li>
+<li>nat</li>
+<li>...</li>
+</ul>
+</li>
+<li><p>COMMAND：定义如何对规则进行管理</p>
+<ul>
+<li>...</li>
+</ul>
+</li>
+<li><p>chain：  指定<strong>链</strong></p>
+<ul>
+<li>PREROUTING</li>
+<li>INPUT</li>
+<li>FORWARD</li>
+<li>OUTPUT</li>
+<li>POSTROUTING</li>
+</ul>
+</li>
+<li><p>CRETERIA:  指定匹配准则（ip、协议、端口）</p>
+<ul>
+<li>...</li>
+</ul>
+</li>
+<li><p>-j TARGET :指定如何进行处理 （DROP  or ACCEPT）</p>
+<ul>
+<li>ACCEPT 允许防火墙接收数据包</li>
+<li>DROP   防火墙丢弃包</li>
+</ul>
+</li>
+</ul>
+<p>实例：不允许192.168.16.35 访问我的主机</p>
+<pre><code class="lang-bash">itcast@itcast $iptables -t filter -A INPUT -s 192.168.16.35  -j DROP
+</code></pre>
+<h4 id="command-"><strong>COMMAND</strong>详解</h4>
+<ul>
+<li><p>规则查看 <strong>-L</strong></p>
+<ul>
+<li>基本格式: <code>iptables [-t table]  -L</code></li>
+</ul>
+</li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ sudo iptables -t filter -L -n  # -n， 以点分10进制显示filter表的IP地址
+
+itcast@itcast $ sudo iptables -t filter -L --line-numbers # --line-numbers， 显示filter表中规则的行号
+</code></pre>
+<ul>
+<li><p>配置默认策略 <strong>-P</strong></p>
+<ul>
+<li>基本格式：｀iptables [-t table] -P chain (DROP|ACCEPT)｀</li>
+</ul>
+</li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ sudo iptables -t filter -P INPUT DROP  #配置filter表，INPUT链默认规则为DROP
+</code></pre>
+<ul>
+<li><p>追加规则</p>
+<ul>
+<li>基本格式： <code>iptables [-t table] -A chain CRETIRIA -j ACTION</code> </li>
+</ul>
+<p>以禁止访问外网web界面为列</p>
+</li>
+</ul>
+<pre><code class="lang-bash"># 添加规则
+itcast@itcast $ sudo iptables -t filter -A OUTPUT  -p tcp  --dport 80 -j DROP 
+</code></pre>
+<ul>
+<li><p>删除规则</p>
+<ul>
+<li>基本格式： <code>iptables [-t table] -D  chain NUM</code></li>
+</ul>
+</li>
+</ul>
+<pre><code class="lang-bash">
+# 删除规则
+itcast@itcast $ sudo iptables -t filter -L OUTPUT  --line-number #获取num
+Chain OUTPUT (policy ACCEPT)
+num  target     prot opt source               destination
+1    DROP       tcp  --  anywhere             anywhere             tcp dpt:http
+
+itcast@itcast $ sudo iptables -t filter -D OUTPUT 1  #删除
+itcast@itcast $ sudo iptables -t filter -D OUTPUT  -p tcp --dport 80 -j DROP # 也是删除
+
+itcast@itcast $ sudo iptables -t filter -L OUTPUT --line-number  #查看
+Chain OUTPUT (policy ACCEPT)
+num  target     prot opt source               destination
+</code></pre>
+<ul>
+<li>插入规则<ul>
+<li>基本格式： <code>iptables [-t table] -R NUM chain CRETIRIA -j ACTION</code></li>
+</ul>
+</li>
+</ul>
+<pre><code class="lang-bash">
+# 插入规则
+
+itcast@itcast $ sudo iptables -t filter -A OUTPUT -p tcp --dport 81 -j DROP
+
+itcast@itcast $ sudo iptables -t filter -L  OUTPUT  --line-number 
+Chain OUTPUT (policy ACCEPT)
+num  target     prot opt source               destination         
+1    DROP       tcp  --  anywhere             anywhere             tcp dpt:81
+
+itcast@itcast $ sudo iptables -t filter -I OUTPUT 1 -p tcp --dport 82 -j DROP  #插入
+itcast@itcast $ sudo iptables -t filter -L  OUTPUT  --line-number 
+Chain OUTPUT (policy ACCEPT)
+num  target     prot opt source               destination         
+1    DROP       tcp  --  anywhere             anywhere             tcp dpt:82   # 82在前
+2    DROP       tcp  --  anywhere             anywhere             tcp dpt:81
+
+itcast@itcast $ sudo iptables -t filter -A OUTPUT  -p tcp --dport 83 -j DROP  ##追加
+itcast@itcast $ sudo iptables -t filter -L  OUTPUT  --line-number 
+Chain OUTPUT (policy ACCEPT)
+num  target     prot opt source               destination         
+1    DROP       tcp  --  anywhere             anywhere             tcp dpt:82
+2    DROP       tcp  --  anywhere             anywhere             tcp dpt:81
+3    DROP       tcp  --  anywhere             anywhere             tcp dpt:83  ##83在后
+</code></pre>
+<ul>
+<li>清空规则 <strong>-F</strong><ul>
+<li>基本格式： <code>iptables [-t table] -F chain</code> </li>
+</ul>
+</li>
+</ul>
+<pre><code class="lang-bash"> #清空filter表中的OUTPUT链
+itcast@itcast $ sudo iptables -t filter -F OUTPUT
+
+ # 清空filter中的所有链
+itcast@itcast $ sudo iptables -t filter -F
+</code></pre>
+<h4 id="creteria-"><strong>CRETERIA</strong>详解</h4>
+<blockquote>
+<p>“条件”的匹配模式很多，我们介绍两类，一类是基于IP的匹配条件，一类是基于协议的匹配条件</p>
+</blockquote>
+<ul>
+<li><p><strong>基于IP的匹配</strong></p>
+<p>基于IP匹配，就是以源地址、目标地址为匹配条件的匹配</p>
+<ul>
+<li><p>-s 指定作为源地址匹配</p>
+<ul>
+<li>IP ： 192.168.16.35</li>
+<li>IP/MASK: 192.168.16.0/24</li>
+</ul>
+</li>
+<li><p>-d 表示匹配目标地址</p>
+</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li><p><strong>基于协议匹配</strong></p>
+<ul>
+<li><p>-p tcp :TCP协议， 可带三种扩展</p>
+<ul>
+<li>--dport XX-XX：指定目标端口,</li>
+<li>--dport 21 指定单个端口，</li>
+<li>--dport 21-23 (此时表示21,22,23)
+　　--sport：指定源端口</li>
+</ul>
+</li>
+<li><p>-p udpUDP协议, 支持两种扩展</p>
+<ul>
+<li>--dport</li>
+<li>--sport</li>
+</ul>
+</li>
+<li><p>-p icmp： icmp数据报文, 支持一种扩展</p>
+<ul>
+<li>--icmp-type： 指定icmp类型</li>
+<li>--icmp-type echo-request : 也可以用 --icmp-type 8</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li><p>基于网络设备接口的匹配</p>
+<ul>
+<li><p>-i eth0：从这块网卡流入的数据</p>
+<ul>
+<li>流入一般用在INPUT和PREROUTING上</li>
+</ul>
+</li>
+<li><p>-o eth0：从这块网卡流出的数据</p>
+<ul>
+<li>流出一般在OUTPUT和POSTROUTING上</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li>综合实例： 只要是来自于172.16.0.0/16网段的都允许访问我本机的172.16.100.1的SSHD服务</li>
+</ul>
+<pre><code class="lang-bash"> #定义进来的：
+iptables -t filter -A INPUT -s 172.16.0.0/16 -d 172.16.100.1 -p tcp --dport 22 -j ACCEPT
+
+ #定义出去的：
+iptables -t filter -A OUTPUT -s 172.16.100.1 -d 172.16.0.0/16 -p tcp --dport 22 -j ACCEPT
+`
+</code></pre>
+<h3 id="-">牛刀小试</h3>
+<h4 id="ssh-">ssh远程登录实战</h4>
+<p> <strong>ssh服务端</strong></p>
+<pre><code class="lang-bash"> #  允许接受ssh客户请求
+itcast@itcast $ sudo iptables -t filter -A INPUT  -p tcp  -dport 22 -j ACCEPT
+
+ # 允许发送本地主机的SSH相应
+itcast@itcast $ sudo iptables -t filter -A OUTPUT  -p tcp  -sport 22 -j ACCEPT
+
+ # 禁止接受ssh客户请求
+itcast@itcast $ sudo iptables -t filter -A INPUT  -p tcp  -dport 22 -j DROP
+</code></pre>
+<p> <strong>ssh客户端</strong> （禁止通过ssh访问某主机， 是防止成为“跳板机”）</p>
+<pre><code class="lang-bash"> # 允许发送向远程主机的SSH请求
+iptables -A OUTPUT -i eth0 -p tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
+
+ # 禁止发送向远程主机的SSH请求
+iptables -A OUTPUT -o eth0 -p tcp --dport 22 -m state --state NEW,ESTABLISHED -j DROP
+
+ # 接收的数据包源端口为22
+$ iptables -A INPUT -i eth0 -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
+</code></pre>
+<p>  -m state: 启用状态匹配模块（state matching module）</p>
+<p>  –-state: 状态匹配模块的参数。 当SSH客户端第一个数据包到达服务器时，状态字段为NEW；建立连接后数据包的状态字段都是ESTABLISHED</p>
+<h4 id="web-">Web服务实战</h4>
+<p><strong>服务端</strong></p>
+<pre><code class="lang-bash">  # 允许接收远程主机的HTTP请求
+$ iptables -A INPUT -i eth0 -p tcp --dport 80 -m state --state NEW,ESTABLISHED -j ACCEPT
+
+  # 允许发送本地主机的HTTP响应
+$ iptables -A OUTPUT -o eth0 -p tcp --sport 80 -m state --state ESTABLISHED -j ACCEPT
+
+ # 允许特定IP访问
+
+iptables -A INPUT -s 172.16.100.1 -p tcp --dport 80 -m state --state NEW,ESTABLISHED -j ACCEPT
+
+
+</code></pre>
+<p><strong>浏览器端</strong></p>
+<blockquote>
+<p>禁止当前主机访问IP为xxx的web服务</p>
+</blockquote>
+<pre><code class="lang-bash">    iptables -A OUTPUT -d 10.01.10.23 -p tcp --dport 80 -m state --state NEW,ESTABLISHED -j DROP
+</code></pre>
+<h4 id="ping-attack-">ping attack防护</h4>
+<blockquote>
+<p>ping attack 一般两种类型， 一种是向目标主机发送ping命令测试数据包时，目标主机都需要耗费一定的系统资源进行应答回复（DOS），  还有一种是通过把报文分割成片段，向目标主机发送大于65536字节的ICMP包，而后在目标主机上重组， 最终导致目标主机缓冲区溢出，发生瘫痪故障。</p>
+</blockquote>
+<blockquote>
+<p>简单而有效的防护措施，在防火墙过滤到ICMP报文。 </p>
+</blockquote>
+<p> ping 发送echo-request （ICMP type 8）， 如目标主机在线存活， 则接受到echo-replay （icmp type 0）</p>
+<p><strong>服务器端</strong></p>
+<blockquote>
+<p>禁止其他主机，ping 当前主机</p>
+</blockquote>
+<pre><code class="lang-bash">iptables -A INPUT -p icmp --icmp-type 8 -j DROP
+
+iptables -A OUTPUT -p icmp --icmp-type 0 -j DROP
+</code></pre>
+<blockquote>
+<p>允许其他主机ping当前主机</p>
+</blockquote>
+<pre><code class="lang-bash">        iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT
+        iptables -A OUTPUT -p icmp --icmp-type echo-reply -j ACCEPT
+</code></pre>
+<p><strong>客户端</strong></p>
+<blockquote>
+<p>禁止ping其他主机</p>
+</blockquote>
+<pre><code class="lang-bash">iptables -A OUTPUT -p icmp --icmp-type echo-request -j DROP
+
+iptables -A INPUT -p icmp --icmp-type echo-reply -j DROP
+</code></pre>
+<!-- echo 1 /proc/sys/net/ipv4/icmp_echo_ignore_all --> 
+<!-- 即禁止ping别人，也禁止别人ping自己 -->
+<p>小扩展：对于127.0.0.1比较特殊，我们需要明确定义它</p>
+<pre><code class="lang-bash">iptables -A INPUT -s 127.0.0.1 -d 127.0.0.1 -j ACCEPT
+
+iptables -A OUTPUT -s 127.0.0.1 -d 127.0.0.1 -j ACCEPT
+
+</code></pre>
+<h3 id="-">拓展知识</h3>
+<h4 id="-">规则保存和恢复</h4>
+<blockquote>
+<p>我们之前添加的防火墙规则， 当系统重启的时候都会失效。 因此系统重启后，需要有个防火墙规则恢复的操作。</p>
+</blockquote>
+<ul>
+<li>关机前，保存当前防火墙规则</li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ pwd
+/home/itcast
+itcast@itcast $ sudo iptables-save &gt; ./iptables.rules
+</code></pre>
+<ul>
+<li>开机后，恢复之前保存的防火墙规则</li>
+</ul>
+<pre><code class="lang-bash">itcast@itcast $ sudo iptables-restore &lt; /home/itcast/iptables.rules
+</code></pre>
+<h4 id="-">规则的生效顺序</h4>
+<blockquote>
+<p>  规则的次序非常关键，谁的规则越严格，应该放的越靠前，而检查规则的时候，是按照从上往下的方式进行检查的。</p>
+</blockquote>
+<ul>
+<li><p>牢记以下三点式理解iptables规则的关键：</p>
+<ul>
+<li>Rules包括一个条件和一个目标(target)</li>
+<li>如果满足条件，就执行目标(target)中的规则或者特定值。</li>
+<li>如果不满足条件，就判断下一条Rules。</li>
+<li>如果全部Rules都不匹配， 则执行默认Target (系统默认ACCEPT)</li>
+</ul>
+</li>
+<li><p>将默认策略改成DROP:</p>
+</li>
+</ul>
+<pre><code> $ iptables -P INPUT DROP
+ $ iptables -P OUTPUT DROP
+ $ iptables -P FORWARD DROP
+</code></pre><!-- 黑、白名单 -->
+<h4 id="-">帮助</h4>
+<ul>
+<li><p><strong>Iptables 帮助</strong></p>
+<ul>
+<li>man iptables</li>
+<li>man iptables-externsion</li>
+</ul>
+</li>
+</ul>
+<h2 id="tcp-wrapper-">TCP Wrapper： 轻量级的防火墙应用</h2>
+<blockquote>
+<p>tcp wrappers为那些链接libwrap.so库的服务，提供了 由xinetd这支superdaemon管理的服务提供了安全性。由xinetd super daemon管理的服务以及支持libwrap模块的服务都可以使用它tcp wrappers进行安全控制。</p>
+</blockquote>
+<p>可以通过使用tcp wrappers结合防火墙（iptables）提供更加安全的系统保护。</p>
+<h3 id="tcp-wrappers-">tcp wrappers的配置</h3>
+<h4 id="-">配置文件</h4>
+<p>tcp wrappers的配置文件有两个，一个是/etc/hosts.allow，一个是/etc/hosts.deny。</p>
+<ul>
+<li><p>/etc/hosts.allow：允许指定的客户端对指定的服务访问。</p>
+</li>
+<li><p>/etc/hosts.deny：拒绝指定的客户端对指定的服务访问。</p>
+</li>
+</ul>
+<p>修改完成之后，不需要重新启动服务，就会立即生效。</p>
+<p><strong>配置规则的有效次序</strong></p>
+<ol>
+<li>默认策略是允许 （即没有在hosts.allow和hosts.deny中出现的，允许通过。）</li>
+<li>先查看hosts.allow</li>
+<li>再查看hosts.deny。</li>
+</ol>
+<h4 id="-">文件配置规则</h4>
+<blockquote>
+<p> 每一个控制文件都可以包含多行，按照定义的顺序处理每一行，找到匹配后就跳出该规则。  </p>
+</blockquote>
+<blockquote>
+<p> 以#开始的表示注释，</p>
+</blockquote>
+<blockquote>
+<p> 如果一行写不完可以使用反斜线(\)，进行续行，表示上一行的延续。</p>
+</blockquote>
+<p> hosts.allow和hosts.deny定义格式如下：</p>
+<pre><code class="lang-bash">     daemon_list : client_list [ : shell_command ]
+</code></pre>
+<ul>
+<li>daemon_list： 指定由TCP wrappers需要控制的服务名称。比如 sshd， 如果该服务是由xinetd管理的服务，要写启动脚本的名称，如/etc/xinetd.d/telnet。</li>
+</ul>
+<p>下述为tftp服务的配置文件：/etc/xinetd.d/tftp</p>
+<p>如果要想使用tcp wrappers控制tftp的话，需要在hosts.allow或hosts.deny文件中，写上tftp的启动脚本:/use/sbin/in.tftpd</p>
+<pre><code class="lang-bash">service tftp
+{
+       socket_type         = dgram
+       protocol               = udp
+       wait                    = yes
+       user                    = root
+       server                  = /usr/sbin/in.tftpd
+       server_args             = -s /tftpboot
+       disable                 = no
+       per_source              = 11
+       cps                     = 100 2
+       flags                   = IPv4
+}
+</code></pre>
+<ul>
+<li><ul>
+<li>client_list：指定tcpwrappers需要控制哪些客户端对哪些服务的访问。</li>
+</ul>
+</li>
+</ul>
+<p>可以用如下方法表示：</p>
+<ul>
+<li><p>单一主机：192.168.0.1，表示的是192.168.0.1这台主机。</p>
+</li>
+<li><p>指定网段：192.168.0.或者是192.168.0.0/255.255.255.0表示的是192.168.0.0/24整个网段。</p>
+</li>
+<li><p>指定DNS后缀：.frame.com，所有DNS后缀为.frame.com的主机。</p>
+</li>
+<li><p>指定FQDN：server.frame.com ，表示的是FQDN为server.frame.com的主机。</p>
+</li>
+<li><p>所有客户端：ALL</p>
+</li>
+</ul>
+<h3 id="-">牛刀小试</h3>
+<p>一般就是通过&quot;白名单制度&quot;, 就是在hosts.deny中禁止所有的client访问，在hosts.allow中，开启允许访问的client</p>
+<!-- #### telnet防护实战 #### -->
+<h4 id="ssh-">ssh防护实战</h4>
+<ul>
+<li>允许 192.168.16.3访问</li>
+</ul>
+<pre><code class="lang-bash">
+$ cat /etc/hosts.allow 
+
+sshd:192.168.16.3
+
+$ cat /etc/hosts.deny 
+ ALL: ALL
+</code></pre>
+<ul>
+<li>允许172.16.0.0/16 网段访问sshd服务（放行sshd服务）</li>
+</ul>
+<pre><code class="lang-bash">
+$ cat /etc/hosts.allow 
+
+sshd:172.16.0.0/16
+
+$ cat /etc/hosts.deny 
+ ALL: ALL
+</code></pre>
+<pre><code>
+
+###  确认服务是否支持tcp wrappers ###
+
+&gt; 不是所有的服务，都支持tcp wapper， 只有链接了libwrap.so库的服务，才可以通过tcpwrapper防护。
+
+ 确认ssh是否支持tcp warpper
+
+```bash
+$ ldd /usr/sbin/sshd | grep &quot;wrap&quot;
+    libwrap.so.0 =&gt; /lib/x86_64-linux-gnu/libwrap.so.0 (0x00007fe251bed000)
+</code></pre><p> 上述表明sshd这个服务是支持tcp wrappers的。如果没有libwrap，则表示该服务不支持tcp wrappers。</p>
+<p>确认xinet是否支持tcp warpper</p>
+<pre><code class="lang-bash">[root@test01 ~]# ldd $(which sshd) | grep libwrap
+    libwrap.so.0 =&gt; /lib64/libwrap.so.0 (0x00007fa039d12000)
+</code></pre>
+<p>确认inetd是否支持tcp warpper</p>
+<pre><code class="lang-bash">$ ldd /usr/sbin/tcpd  | grep wrap
+    libwrap.so.0 =&gt; /lib/x86_64-linux-gnu/libwrap.so.0 (0x00007f23d5f4b000)
+`
+</code></pre>
+<h3 id="-">帮助</h3>
+<ul>
+<li><p><strong>TcpWrappers帮助</strong></p>
+<ul>
+<li>man hosts_access  (or man hosts.allow)</li>
+<li>man hosts_options</li>
+<li>man tcpd</li>
+</ul>
+</li>
+</ul>
+<h2 id="-">随堂练习</h2>
+<ul>
+<li><p>主机防护 tcpwraper实现基于：</p>
+<ul>
+<li>A： 内核</li>
+<li>B： tcpwrap库（libwrap）</li>
+<li>C： tcpd</li>
+<li>D： 以上都不是</li>
+</ul>
+</li>
+<li><p>判断： openssh支持采用tcpwraper方法进行防护（） </p>
+</li>
+</ul>
+<h1 id="linux-">Linux 入侵检测分析技术</h1>
+<ul>
+<li><strong>目标</strong><ul>
+<li>了解入侵检测分析的基本方法</li>
+<li>掌握查看登录失败用户的方法</li>
+<li>掌握查阅历史命令的方法</li>
+<li>掌握检查系统开机自启服务的方法</li>
+</ul>
+</li>
+</ul>
+<h2 id="-">概述</h2>
+<p>  最好的安全防护当然是“域敌于国门之外”， 通过安全防护技术，来保证当前主机不被非授权人员入侵，但是“道高一尺，魔高一丈”， 再好的防护手段、往往也会有疏漏的地方。在这种情况下，事后（入侵后）的追溯技术就很重要了。好比一个窃贼到我们家溜达一圈，我竟然无法知道是否窃贼来过，细思这是一件非常恐怖的事情。这就意味着，我们的家（主机）不在安全，鬼知道窃贼什么时候再来溜达一圈。</p>
+<p>  入侵分析技术一般通过是通过分析主机关键的文件记录、进程信息等来达到分析主机是否被侵入的目的。从安全防护的角度来讲，这是一项事后追踪技术（可追溯性）;从攻击的角度来说， 当Hack成功实施攻击（入侵）后，要进行掩踪灭迹，也就是清除入侵痕迹，当知道入侵分析哪些地方后，那么作为入侵者也就明白需要重点关注哪些入侵痕迹了。</p>
+<p>  所谓“未知攻，焉知防”， 同样也可以说“未知防，焉知攻”,  攻防之道，本就是在攻防博弈中相互提高。</p>
+<h2 id="-">入侵分析</h2>
+<h3 id="-">用户帐号</h3>
+<p>  从攻击的角度来讲，Hacker实施攻击后，除了会“掩踪灭迹”之外还会进行“创建后门”，以便将这种攻击的机会持续下去，而创建后门用户帐号，往往是比较可行的途径。</p>
+<ol>
+<li>搜寻具备shell用户的帐号， /etc/passwd</li>
+</ol>
+<pre><code class="lang-sh">Panda.Guo@2018-04-18 11:34:31 $ cat /etc/passwd|awk -F: &#39;{print $7}&#39;| sort |uniq -c
+  3 /bin/bash
+  21 /bin/false
+  1 /bin/sync
+  17 /usr/sbin/nologin
+Panda.Guo@2018-04-18 11:45:31 $ cat /etc/passwd | grep &quot;bash&quot;
+  root:x:0:0:root:/root:/bin/bash
+  panda:x:1000:1000:panda,,,:/home/panda:/bin/bash
+  itcast:x:2001:2001::/home/itcast:/bin/bash
+Panda.Guo@2018-04-18 11:45:40 $
+</code></pre>
+<p>对其中有shell的用户需要重点关注，本文假设itcast用户为“需重点关照”用户</p>
+<ol start="2">
+<li><p>进一步分析用户itcast</p>
+</li>
+<li><p>查看用户id和组信息：</p>
+</li>
+</ol>
+<pre><code>Panda.Guo@2018-04-18 11:45:40 $ id itcast 
+  uid=2001(itcast) gid=2001(itcast) group=2001(itcast)
+</code></pre><ul>
+<li>查看用户最近登录信息</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-18 11:51:33 $ lastlog -u itcast 
+Username         Port     From             Latest
+itcast           pts/10   127.0.0.1        Thu Apr 12 19:03:20 +0800 2018
+</code></pre><ul>
+<li>查看用户历史登录信息: last hacker</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-18 11:51:35 $ last itcast 
+itcast   pts/10       127.0.0.1        Thu Apr 12 19:03 - 10:16  (15:12)
+itcast   pts/6        172.16.28.59     Thu Apr 12 16:03 - 16:03  (00:00)
+itcast   pts/6        172.16.28.59     Thu Apr 12 16:02 - 16:03  (00:00)
+
+wtmp begins Sun Apr  1 23:41:17 2018
+</code></pre><ul>
+<li>查看用户登录失败信息:</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-18 11:52:45 $ sudo lastb itcast
+itcast   ssh:notty    127.0.0.1        Thu Apr 12 19:03 - 19:03  (00:00)
+itcast   ssh:notty    172.16.28.59     Thu Apr 12 16:03 - 16:03  (00:00)
+
+btmp begins Tue Apr  3 09:20:30 2018
+Panda.Guo@2018-04-18 11:52:49 $ 
+</code></pre><ul>
+<li>查看综合信息: finger hacker</li>
+</ul>
+<pre><code>Panda.Guo@2018-04-18 11:53:20 $ finger itcast
+Login: itcast                     Name: 
+Directory: /home/itcast                 Shell: /bin/bash
+Last login Thu Apr 12 19:03 (CST) on pts/10 from 127.0.0.1
+No mail.
+No Plan.
+</code></pre><p> 如果itcast用户登录有异常的IP登录, 则需重点关注</p>
+<h3 id="-sudo-">可提权用户（sudo）</h3>
+<p>Debian系统允许普通用户通过sudo来获取root用户权限， 因此对于已经存在的普通用户，如果其在<code>/etc/sudoers</code>或者<code>/etc/sudoers.d/</code>下的文件中， 则表示此普通用户可以通过sudo来完成root操作， 需要特别关注。</p>
+<p>  另可以通过命令<code>groups itcast</code>（其中itcast指代需要关注的用户username）， 如果该用户所属的组是root或者 sudo组，或者该用户在<code>/etc/sudoers</code>(包括<code>/etc/sudoer.d/</code>目录)， 那就需要重点关注了。</p>
+<h3 id="-">开机自启服务</h3>
+<p> 不同的Linux发行版，采用的服务管理器是不同的， Debian 8以上已经采用Systemd作为服务器管理器，其实目前较新的发行版系统上多在采用systemd。本次我们以Systemd为例来分析开机自起的一些程序。</p>
+<p>  对于systemd服务管理器来说，可以通过下述方式查看开机自启的服务:</p>
+<pre><code>Panda.Guo@2018-04-18 15:25:23 $ systemctl list-unit-files --type=service | grep &quot;enabled&quot;
+  accounts-daemon.service                    enabled
+  anacron.service                            enabled
+  auditd.service                             enabled
+  autovt@.service                            enabled
+  。。。
+</code></pre><p>入侵后，留下一些开机自起的服务，以便后续继续入侵。也是入侵保持持久性的一种手段。</p>
+<h3 id="-">计划（定时）任务</h3>
+<p>  除了开机自启动服务外， Debian还可以通过计划任务来进行持久化运行。</p>
+<p> 检查异常的计划任务相对简单：</p>
+<p>只需要查看<code>/etc/crontab</code>以及子目录下<code>/etc/cron.*</code>的计划任务文件即可.</p>
+<h3 id="shell-">shell的初始化</h3>
+<p>  不同的Linux发行版的默认shell是不一致的， 一般debian系统默认是dash， 而我自己偏爱bash， 一般系统安装完成后，我会调整我的shell为bash， 本节以bash为例进行描述。</p>
+<p>对于shell来说，可分为交互shell/非交互shell、 登录shell和非登录shell。本质上就是在shell启动期间，默认执行的配置文件不同而已。 关于这块的详细区别，可参考<code>man bash</code> 中的INVOCATION章节。或者参考下图：
+<img src="./images/03.00-BashStartupFiles.png" alt="bash配置文件启动顺序"></p>
+<p>简单分析如下：</p>
+<ul>
+<li>非交互/非登录shell： $BASh_ENV（环境变量）</li>
+<li>非交互/登录shell：<code>/etc/profile</code> (<code>$HOME/.bash_profile</code>、<code>$HOME/.bash_login</code>、<code>$HOME/.profile</code>按次序先存在的执行)</li>
+<li>交互/非登录shell： <code>/etc/bash_bashrc</code>、<code>$HOME/.bashrc</code></li>
+<li><p>交互/登录shell：<code>/etc/profile</code> (<code>$HOME/.bash_profile</code>、<code>$HOME/.bash_login</code>、<code>$HOME/.profile</code>按次序先存在的执行)</p>
+<p>上面描述的比较复杂。简单说，就是bash在启动时，要执行几个脚本文件。 这些文件中如果有命令，在某种情况下（登录非登录、交互非交互）可能会被执行。 入侵分析的重点就是查看这些文件中是否存在可疑命令。</p>
+</li>
+</ul>
+<h3 id="-">历史命令</h3>
+<p>  一般而言, 入侵者获取shell之后会在上面执行某些命令, 我们可以通过<code>history</code>命令来查看曾经运行过的命令.或者直接查看<code>~/.bash_history</code>文件. 高明的入侵者完成入侵后，也会进行某些掩踪灭迹。 因此， 如果发现曾经运行过的命令中有一些可疑命令（莫名奇妙的命令），或者发现history被恶意清除,或者被异常篡改, 这也是我们常用的入侵分析技术。</p>
+<p> 和<code>history</code>命令相关有几个环境变量，需要我们特别关注，详情可通过man bash 查看</p>
+<ul>
+<li>HISTFILE: 保存历史命令的文件， 默认是 ~/.bash_history</li>
+<li>HISTFILESIZE: 历史文件中包含的最大行数。</li>
+<li>HISTSIZE: 命令历史中保存的命令数量行数。</li>
+<li>HISTTIMEFORMAT: 保存历史命令的时间格式。</li>
+</ul>
+<h3 id="-">系统日志</h3>
+<p>在debian9上，系统日志统一由rsyslog进程产生， 和rsyslog相关的配置可参考<code>/etc/rsyslog.conf</code>文件以及<code>/etc/rsyslog.d/</code>目录。</p>
+<ul>
+<li>登录相关信息<ul>
+<li>查看每个用户最近的登录时间和ip: <code>lastlog</code></li>
+<li>查看每个用户的登录记录: <code>last</code></li>
+<li>查看每个用户的登录尝试(包括失败的)记录: <code>lastb</code></li>
+<li>查看当前登录的用户,ip以及正在执行的命令: <code>w</code></li>
+</ul>
+</li>
+<li>一些常见的系统日志介绍如下：<ul>
+<li>/var/log/messages: 一般的系统日志</li>
+<li>/var/log/kern.log: 系统内核日志</li>
+<li>/var/log/boot.log: 系统启动日志</li>
+<li>/var/log/auth.log: 登录相关的日志, 比如ssh/sudo成功失败的日志都在这里</li>
+<li>/var/log/cron.d: cron计划任务的执行日志</li>
+</ul>
+</li>
+<li>审计， 审计日志由auditd产生，<code>/etc/audit/auditd.conf</code>为审计配置文件，<code>/etc/audit/audit.rules</code> 为审计规则文件。<ul>
+<li>/var/log/audit/* ： 为审计记录，可以进一步分析，也许可以发现一些意想不到的痕迹(如果有的话).</li>
+</ul>
+</li>
+</ul>
+<h3 id="-">可疑进程</h3>
+<p>  一般可通过<code>top</code>命令查看正在运行的程序所占用的资源, 或者用<code>ps aux</code>列出当前系统所用的进程.
+如果发现可疑进程（没见过、耗资源）, 可以用以下命令进一步：</p>
+<ul>
+<li>查看该进程启动的完整命令行: <code>ps eho command -p $PID</code></li>
+<li>查看该进程启动时候所在的目录: <code>readlink /proc/$PID/cwd</code></li>
+<li>查看该进程启动时的完整环境变量: <code>strings -f /proc/$PID/environ | cut -f2 -d ‘ ‘</code></li>
+<li>列出该进程所打开的所有文件: <code>lsof -p $PID</code></li>
+</ul>
+<p>如果某个可疑进程正在活动，一般会与外界有网络交互，可通过如下方法进一步分析：</p>
+<ul>
+<li>查看当前主机的网络连接情况， <code>netstat -apn | grep $PID</code></li>
+<li>抓包分析，<code>tcpdump</code> 或者 使用图形化抓包工具<code>wireshark</code></li>
+<li>查看主机防火墙<code>iptables</code>， DNS（<code>/etc/resolv.conf</code>和<code>/etc/resolvconf/</code>）、http代理，或者<code>/etc/hosts</code>, 都可能会导致我们正常的网络请求被攻击者监听并篡改. 这些小小的修改也许不是很明显,可一旦发现自身网络环境’不太对劲’, 就要提高警惕, 仔细排查了.</li>
+</ul>
+<hr>
+<h2 id="-">随堂练习</h2>
+<ul>
+<li>以下方式中，可以得到当前系统开机自启服务的方法是（多选）<ul>
+<li>A： systemctl list-unit-files  | grep enabled</li>
+<li>B： runlevel + /etc/rcN.d/ | grep &quot;S*&quot;  其中N值从runlevel中获取</li>
+<li>C： ls /etc/init.d/*  </li>
+<li>D： 以上都不对</li>
+</ul>
+</li>
+</ul>
+
+          	</article>
+        </div>
+		</div>
+  </body>
+</html>
+<script type="text/javascript" src="toc/js/jquery-1.4.4.min.js"></script>
+<script type="text/javascript" src="toc/js/jquery.ztree.all-3.5.min.js"></script>
+<script type="text/javascript" src="toc/js/ztree_toc.js"></script>
+<script type="text/javascript" src="toc_conf.js"></script>
+
+<SCRIPT type="text/javascript" >
+<!--
+$(document).ready(function(){
+    var css_conf = eval(markdown_panel_style);
+    $('#readme').css(css_conf)
+    
+    var conf = eval(jquery_ztree_toc_opts);
+		$('#tree').ztree_toc(conf);
+});
+//-->
+</SCRIPT>

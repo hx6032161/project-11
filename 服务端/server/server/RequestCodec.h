@@ -6,7 +6,7 @@ struct RequestMsg
     int		cmdType;		// 报文类型
 	char	clientId[12];	// 客户端编号
 	char	authCode[65];	// 认证码
-	char	serverId[12];	// 服务器端编号 
+	char	serverId[12];	// 服务器端编号 （数据库和共享内存中的编号） 
 	char	r1[64];			// 客户端随机数
 };
 

@@ -1,0 +1,37 @@
+1.要在图形界面下安装所以先安装一个linux图形界面
+2.安装gnome-desktop
+3.安装xrdp
+# yum install xrdp（遇到问题可能是bug 不能直接使用yum安装，最后从网上下载xrdp-0.5.0-0.13.el7.x86_64.rpm包进行手动安装）
+4安装tigervnc
+# yum install tigervnc tigervnc-server
+5参考资料https://www.jb51.net/os/RedHat/531360.html
+	
+
+。。。
+6测试是否可以正常连接
+	6.1windows端安装tigervnc客户端 参考资料：https://www.cnblogs.com/linux-wangkun/p/5970046.html
+	使用安装好的tigervnc	vncviewer进行连接 输入主机ip记得还要加上桌面号106.12.201.149:1
+	（成功连接桌面）
+		linux启动vncserver
+		关闭 vncserver -kill :1
+	6.2windows远程桌面运行中打mstsc(失败，连接上后会卡掉 不知道什么原因)
+	
+7继续准备安装oracle数据库 参考资料https://blog.csdn.net/qq_22260641/article/details/76182447
+	7.1从oracle官网下载数据库安装包
+	7.2创建运行oracle数据库的系统用户和用户组
+	7.3配置系统各种配置文件 
+		/etc/sysctl.conf 详细参数解释https://blog.csdn.net/tallercc/article/details/52823075
+		etc/profile 与系统环境变量相关
+		
+		创建Swap文件  
+			# dd if=/dev/zero of=swapfile bs=1024 count=65536  创建一个有连续空间的交换文件。  
+		激活Swap文件  
+			#/usr/sbin/swapon swapfile  
+	
+	7.4安装数据库本体
+	7.5执行netca 创建监听
+	7.6执行dbca 创建数据库 这两个都是要在图形界面上进行
+	（这时我发现之前的教程版本有点老 参考下12c版本的新教程https://blog.csdn.net/linghe301/article/details/9221665）
+
+oracle 创建用户  create user bbq identified by bbq;
+赋予create session 的权限 https://blog.csdn.net/farxix/article/details/79568752
