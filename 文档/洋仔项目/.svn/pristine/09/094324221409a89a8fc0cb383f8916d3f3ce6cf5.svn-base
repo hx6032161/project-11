@@ -1,0 +1,572 @@
+#include "SoapInc/Soap.h"
+#include "SoapInc/Xml.h"
+#include "SoapInc/Cfg.h"
+#include "HtLog.h"
+
+static char sWebSrvMethod[128];
+static char sSoapLogName[32] = "Soap.log";
+static int SoapBodyRootCfgInit(SOAPENV *env, char *ixmlNode, int iReqOrRsp);
+
+/************************************************************************
+ * 读取配置文件进行初始化
+ ************************************************************************/
+int SoapTreeInit(XML_TREE *pSoapTree, char *sSoapCfgName)
+{
+    char ixmlNode[128];
+    char tempValue[128];
+    char tempItemName[128];
+    char attribute_nam[128];
+    char attribute_val[512];
+    int  envAttrNum =0;
+    char *pGetValueTemp = NULL;
+    char rootns[128];
+    int  i;
+    
+    if (OpenCfgFile(sSoapCfgName)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "OpenCfgFile  Failed");
+        return -1;    
+    }
+
+    memset(ixmlNode, 0, sizeof(ixmlNode));
+    memset(tempValue, 0, sizeof(tempValue));
+    memset(rootns, 0, sizeof(rootns));
+    if (GetSoapRootCfgItem("rootns", tempValue)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetSoapRootCfgItem(rootns)  Failed");
+        CloseCfgFile();
+        return -1;
+    }
+    /*添加soap ENVELOP*/
+    sprintf(rootns, "%s", tempValue);
+    sprintf(ixmlNode, "/%s:Envelope", rootns);
+    if (AddXmlNode(pSoapTree, ixmlNode, NULL)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "AddXmlNode [%s] error", ixmlNode);
+        CloseCfgFile();
+        return (-1);    
+    }    
+    memset(tempValue, 0, sizeof(tempValue));
+    if (GetSoapEnvelopCfgItem("xmlns_count", tempValue)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetSoapRootCfgItem(xmlns_count)  Failed");
+        CloseCfgFile();
+        return (-1);
+    }
+    envAttrNum = atoi(tempValue);
+    
+    for (i = 0; (envAttrNum >= 0) && (i < envAttrNum); i++) {
+        memset(attribute_nam, 0x00, sizeof(attribute_nam));
+        memset(attribute_val, 0x00, sizeof(attribute_val));
+        memset(tempValue, 0, sizeof(tempValue));
+        memset(tempItemName, 0, sizeof(tempItemName));
+        pGetValueTemp = NULL;
+               
+        sprintf(tempItemName, "xmlns_%d", i+1);
+        if (GetSoapEnvelopCfgItem(tempItemName, tempValue)){
+            HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetSoapRootCfgItem(%s)  Failed", tempItemName);
+            CloseCfgFile();
+            return (-1);
+        }
+        pGetValueTemp = strstr(tempValue, "$$$");
+        if (pGetValueTemp == NULL) {
+            HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+                  "SOAP_ENVELOP Item Cfg Error(%s = %s)", tempItemName, tempValue);
+            CloseCfgFile();
+            return (-1);    
+        }
+               
+        sprintf(attribute_nam, "%s", "xmlns:");
+        memcpy(attribute_nam + 6, tempValue, pGetValueTemp - tempValue);
+        pGetValueTemp += 3;
+        sprintf(attribute_val, "%s", pGetValueTemp);
+        if (AddXmlNodeAttr(pSoapTree, ixmlNode, attribute_nam, attribute_val)){
+            HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__,  
+                  "AddXmlNodeAttr [%s] [%s] error", ixmlNode, attribute_nam);
+            CloseCfgFile();
+            return (-1);    
+        }
+    }
+    
+    /*添加soap HEADER*/
+    memset(ixmlNode, 0, sizeof(ixmlNode));
+    sprintf(ixmlNode, "/%s:Envelope/%s:Header", rootns, rootns);
+    if (AddXmlNode(pSoapTree, ixmlNode, NULL)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "AddXmlNode [%s] error", ixmlNode);
+        CloseCfgFile();
+        return (-1);    
+    }
+    /*添加soap Body*/
+    memset(ixmlNode, 0, sizeof(ixmlNode));
+    sprintf(ixmlNode, "/%s:Envelope/%s:Body", rootns, rootns);
+    if (AddXmlNode(pSoapTree, ixmlNode, NULL)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "AddXmlNode [%s] error", ixmlNode);
+        CloseCfgFile();
+        return (-1);    
+    }
+    /*xml编码问题*/
+    if (GetXmlCfgItem("encoding", tempValue)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetXmlCfgItem(encoding)  Failed");
+        CloseCfgFile();
+        return (-1);
+    } 
+    if (memcmp(tempValue, "GB2312", 6) == 0) {
+        pSoapTree->xmlEncoding = XML_ENCODEING_GB2312;
+    } else if (memcmp(tempValue, "UTF-8", 5) == 0) {
+        pSoapTree->xmlEncoding = XML_ENCODEING_UTF8;
+    } else {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "ChgXmlDefaultEnc not support [%s]", tempValue);
+        CloseCfgFile();
+        return (-1);
+    }
+
+    if (CloseCfgFile()) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "CloseCfgFile  Failed");
+        return -1;    
+    }
+
+    return 0;
+    
+}
+
+/*ixmlNode 为绝对路径*/
+int SoapBodyRootInit(XML_TREE *pSoapTree, char *ixmlNode)
+{
+    char attribute_nam[128];
+    char attribute_val[512];
+    char tempValue[128];
+    char tempItemName[128];
+    int  envAttrNum,i;
+    char *pGetValueTemp = NULL;
+    
+    if (OpenCfgFile(sWebSrvMethod)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "OpenCfgFile[%s.soap]  Failed", sWebSrvMethod);
+        return -1;    
+    }
+    memset(tempValue, 0, sizeof(tempValue));
+    if (GetSoapBodyCfgItem("xmlns_count", tempValue)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetSoapBodyCfgItem(xmlns_count)  Failed");
+        CloseCfgFile();
+        return (-1);
+    }
+    envAttrNum = atoi(tempValue);
+    
+    for (i = 0; (envAttrNum >= 0) && (i < envAttrNum); i++){
+        memset(attribute_nam, 0x00, sizeof(attribute_nam));
+        memset(attribute_val, 0x00, sizeof(attribute_val));
+        memset(tempValue, 0, sizeof(tempValue));
+        memset(tempItemName, 0, sizeof(tempItemName));
+        pGetValueTemp = NULL;
+           
+        sprintf(tempItemName, "xmlns_%d", i+1);
+        if (GetSoapBodyCfgItem(tempItemName, tempValue)){
+            HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+                  "GetSoapBodyCfgItem(%s)  Failed", tempItemName);
+            CloseCfgFile();
+            return (-1);
+        }
+        pGetValueTemp = strstr(tempValue, "$$$");
+        if (pGetValueTemp == NULL) {
+            HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+                  "SOAP_BODY Item Cfg Error(%s = %s)", tempItemName, tempValue);
+            CloseCfgFile();
+            return (-1);    
+        }
+               
+        sprintf(attribute_nam, "%s", "xmlns:");
+        memcpy(attribute_nam + 6, tempValue, pGetValueTemp - tempValue);
+        pGetValueTemp += 3;
+        sprintf(attribute_val, "%s", pGetValueTemp);
+        if (AddXmlNodeAttr(pSoapTree, ixmlNode, attribute_nam, attribute_val)) {
+            HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__,  
+                  "AddXmlNodeAttr [%s] [%s] error", ixmlNode, attribute_nam);
+            CloseCfgFile();
+            return (-1);    
+        }
+    }
+    if (CloseCfgFile()) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "CloseCfgFile  Failed");
+        return -1;    
+    }
+    return 0;
+}
+
+
+/************************************************************************
+ * 对SOAPENV进行初始化、追踪、销毁
+ ************************************************************************/
+int CreateSoapEnv(SOAPENV *env)
+{
+    memset(env, 0x00, sizeof(SOAPENV));
+    env->soapStatus = _SOAP_STATUS_INIT;
+    env->reqxmlDoc = InitXMLTree();
+    if (env->reqxmlDoc == NULL) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "InitXMLTree error");
+        return (-1);
+    }
+
+    env->respxmlDoc = InitXMLTree();
+    if (env->respxmlDoc == NULL) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "InitXMLTree error");
+        return (-1);
+    }
+    return 0;
+}
+
+void SoapDestory(SOAPENV *env)
+{
+    DestroyXmlTree( env->reqxmlDoc );
+    DestroyXmlTree( env->respxmlDoc );
+}
+
+
+void SoapTrace(SOAPENV * soap)
+{
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "reqRootNS     = [%s]" , soap->reqRootNS );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "reqEnvePath   = [%s]" , soap->reqEnvePath );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "reqHeadPath   = [%s]" , soap->reqHeadPath );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "reqBodyPath   = [%s]" , soap->reqBodyPath );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "respRootNS    = [%s]" , soap->respRootNS );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "respEnvePath  = [%s]" , soap->respEnvePath );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "respHeadPath  = [%s]" , soap->respHeadPath );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "respBodyPath  = [%s]" , soap->respBodyPath );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "respFaultPath = [%s]" , soap->respFaultPath );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "reqxmlDoc     = [%d]" , soap->reqxmlDoc );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "respxmlDoc    = [%d]" , soap->respxmlDoc );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "reqxmlBuffer  = [%s]" , soap->reqxmlBuffer );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "respxmlBuffer = [%s]" , soap->respxmlBuffer );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "httpStatus    = [%d]" , soap->httpStatus );
+    HtLog(sSoapLogName, HT_LOG_MODE_NORMAL , __FILE__,__LINE__, "httpStatusDesc= [%s]" , soap->httpStatusDesc );
+    return;
+}
+
+
+/************************************************************************
+ * [STATIC] 调用xml方法进行添加节点、属性以及获取节点值、属性值
+ ************************************************************************/
+static int SoapAddElement(SOAPENV *env, char *sXmlPath, char *sNodeValue, int iReqOrRsp)
+{
+    XML_TREE *pXmlTree = NULL;
+    
+    if(iReqOrRsp == SOAP_REQ_ELEMENT) {
+        pXmlTree = env->reqxmlDoc;
+    } else if(iReqOrRsp == SOAP_RSP_ELEMENT) {
+        pXmlTree = env->respxmlDoc;
+    } else {
+        return (-1);    
+    }
+    if (AddXmlNode(pXmlTree, sXmlPath, sNodeValue)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "AddXmlNode [%s] error", sXmlPath);
+        return (-1);    
+    }    
+
+    return 0;
+}
+
+static int SoapSetElementAttr(SOAPENV *env, char *sXmlPath, char *sAttrName, char *sAttrValue, int iReqOrRsp)
+{
+    XML_TREE *pXmlTree = NULL;
+    
+    if (iReqOrRsp == SOAP_REQ_ELEMENT) {
+        pXmlTree = env->reqxmlDoc;
+    } else if(iReqOrRsp == SOAP_RSP_ELEMENT) {
+        pXmlTree = env->respxmlDoc;
+    } else {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__,  "iReqOrRsp  Wrong [%d] ", iReqOrRsp);
+        return (-1);    
+    }
+    if (AddXmlNodeAttr(pXmlTree, sXmlPath, sAttrName, sAttrValue)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__,  "AddXmlNodeAttr [%s] [%s] error", sXmlPath, sAttrName);
+        return (-1);    
+    }    
+    return 0;    
+}
+
+static int SoapGetElement(SOAPENV *env, char *sXmlPath, char *sNodeValue, int iReqOrRsp)
+{
+    XML_TREE *pXmlTree = NULL;
+    
+    if (iReqOrRsp == SOAP_REQ_ELEMENT) {
+        pXmlTree = env->reqxmlDoc;
+    } else if (iReqOrRsp == SOAP_RSP_ELEMENT) {
+        pXmlTree = env->respxmlDoc;
+    } else {
+        return (-1);    
+    }
+    if (GetXmlNodeValue(pXmlTree, sXmlPath, sNodeValue)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetXmlNodeValue [%s] error", sXmlPath);
+        return (-1);    
+    }    
+    return 0;
+}
+
+static int SoapGetElementAttr(SOAPENV *env, char *sXmlPath, char *sAttrName, char *sAttrValue, int iReqOrRsp)
+{
+    XML_TREE *pXmlTree = NULL;
+    
+    if (iReqOrRsp == SOAP_REQ_ELEMENT) {
+        pXmlTree = env->reqxmlDoc;
+    } else if (iReqOrRsp == SOAP_RSP_ELEMENT) {
+        pXmlTree = env->respxmlDoc;
+    } else {
+        return (-1);    
+    }
+    if (GetXmlNodeAttrValue(pXmlTree, sXmlPath, sAttrName, sAttrValue)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetXmlNodeAttrValue [%s->%s] error", sXmlPath, sAttrName);
+        return (-1);    
+    }    
+    return 0;
+}
+
+
+/************************************************************************
+ * 调用xml方法进行添加节点、属性以及获取节点值、属性值
+ ************************************************************************/
+int SoapBodyAddElement(SOAPENV *env, char *sXmlPath, char *sNodeValue, int isBodyRoot, int iReqOrRsp)
+{
+    char iXmlNode[128];   
+ 
+    memset(iXmlNode, 0x00, sizeof(iXmlNode));
+    
+    if (iReqOrRsp == SOAP_REQ_ELEMENT) {
+        sprintf(iXmlNode, "/%s/",env->reqBodyPath);
+    } else if (iReqOrRsp == SOAP_RSP_ELEMENT) {
+        sprintf(iXmlNode, "/%s/",env->respBodyPath);
+    } else {
+        return (-1);    
+    }
+    
+    strcat(iXmlNode, sXmlPath);
+    if (isBodyRoot) {
+        if (SoapAddElement(env, iXmlNode, sNodeValue, iReqOrRsp)) {
+            HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+                  "SoapAddElement [%s] Failed", iXmlNode);
+            return (-1);    
+        }
+        if (SoapBodyRootCfgInit(env, sXmlPath, iReqOrRsp)) {
+            HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+                  "SoapBodyRootCfgInit [%s] Failed", sXmlPath);
+            return (-1);
+        }
+        return 0;
+        
+    } else {
+        return SoapAddElement(env, iXmlNode, sNodeValue, iReqOrRsp);
+    }
+}
+
+int SoapBodyGetElement(SOAPENV *env, char *sXmlPath, char *sNodeValue, int iReqOrRsp)
+{
+    char iXmlNode[128];    
+
+    memset(iXmlNode, 0x00, sizeof(iXmlNode));
+    
+    if (iReqOrRsp == SOAP_REQ_ELEMENT) {
+        sprintf(iXmlNode, "/%s/",env->reqBodyPath);
+    } else if (iReqOrRsp == SOAP_RSP_ELEMENT) {
+        sprintf(iXmlNode, "/%s/",env->respBodyPath);
+    } else {
+        return (-1);    
+    }
+    strcat(iXmlNode,sXmlPath);
+    
+    return SoapGetElement(env, iXmlNode, sNodeValue, iReqOrRsp);
+}
+
+int SoapBodyGetEleNode(SOAPENV *env, char *sXmlPath, XML_NODE *pEleNode, int iReqOrRsp)
+{
+    char iXmlNode[128];    
+    XML_TREE *pXmlTree = NULL;
+    
+    memset(iXmlNode, 0x00, sizeof(iXmlNode));
+    
+    if (iReqOrRsp == SOAP_REQ_ELEMENT) {
+        sprintf(iXmlNode, "/%s/",env->reqBodyPath);
+        pXmlTree = env->reqxmlDoc;
+    } else if(iReqOrRsp == SOAP_RSP_ELEMENT) {
+        sprintf(iXmlNode, "/%s/",env->respBodyPath);
+        pXmlTree = env->respxmlDoc;
+    } else {
+        return (-1);    
+    }
+    strcat(iXmlNode,sXmlPath);
+
+    if ((pEleNode=GetXmlNode(pXmlTree, sXmlPath)) == NULL) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetXmlNode[%s] error", sXmlPath);
+        return (-1);    
+    }    
+    return 0;
+}
+
+int SoapBodySetElementAttr(SOAPENV *env, char *sXmlPath, char *sAttrName, char *sAttrValue, int iReqOrRsp)
+{
+    char iXmlNode[128];    
+    
+    memset(iXmlNode, 0x00, sizeof(iXmlNode));
+
+    if (iReqOrRsp == SOAP_REQ_ELEMENT) {
+        sprintf(iXmlNode, "/%s/",env->reqBodyPath);
+    } else if (iReqOrRsp == SOAP_RSP_ELEMENT) {
+        sprintf(iXmlNode, "/%s/",env->respBodyPath);
+    } else {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__,  "iReqOrRsp  Wrong [%d] ", iReqOrRsp);
+        return (-1);    
+    }
+    strcat(iXmlNode,sXmlPath);
+    if (SoapSetElementAttr(env, iXmlNode, sAttrName, sAttrValue, iReqOrRsp)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+              "SoapBodySetElementAttr[%s -> %s]  Failed", iXmlNode, sAttrName);
+        return (-1);    
+    }
+    return 0;
+}
+
+int SoapBodyGetElementAttr(SOAPENV *env, char *sXmlPath, char *sAttrName, char *sAttrValue, int iReqOrRsp)
+{
+    char iXmlNode[128];   
+ 
+    memset(iXmlNode, 0x00, sizeof(iXmlNode));
+
+    if (iReqOrRsp == SOAP_REQ_ELEMENT) {
+        sprintf(iXmlNode, "/%s/",env->reqBodyPath);
+    } else if (iReqOrRsp == SOAP_RSP_ELEMENT) {
+        sprintf(iXmlNode, "/%s/",env->respBodyPath);
+    } else {
+        return (-1);    
+    }
+    strcat(iXmlNode,sXmlPath);
+    return SoapGetElementAttr(env, iXmlNode, sAttrName, sAttrValue, iReqOrRsp);
+}
+
+/*ixmlNode 为相对于/SOAPENV:Envelope/SOAPENV:Body/的相对路径*/
+static int SoapBodyRootCfgInit(SOAPENV *env, char *ixmlNode, int iReqOrRsp)
+{
+    XML_TREE *pSoapTree = NULL;
+    char sXpath[128];
+    
+    memset(sXpath, 0x00, sizeof(sXpath));
+    if (iReqOrRsp == SOAP_REQ_ELEMENT) {
+        pSoapTree = env->reqxmlDoc;
+        sprintf(sXpath, "/%s/",env->reqBodyPath);
+    } else if(iReqOrRsp == SOAP_RSP_ELEMENT) {
+        pSoapTree = env->respxmlDoc;
+        sprintf(sXpath, "/%s/",env->respBodyPath);
+    } else {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "Not Supported iReqOrRsp [%d]", iReqOrRsp);
+        return (-1);    
+    }
+    strcat(sXpath, ixmlNode);
+    if (SoapBodyRootInit(pSoapTree, sXpath)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "SoapBodyRootInit Failed");
+        return (-1);    
+    }
+    return 0;
+}
+
+int SoapEnvInit(SOAPENV *env, char *sSoapCfgName, int iReqOrRsp)
+{
+    char tempValue[128];
+    char rootns[128];
+    int i,nRet;
+    char *pTmpED = NULL;
+    XML_TREE *pSoapTree = NULL;
+    
+    memset(sWebSrvMethod, 0x00, sizeof(sWebSrvMethod));
+    sprintf(sWebSrvMethod, "%s", sSoapCfgName);
+    
+    if (iReqOrRsp == SOAP_REQ_ELEMENT) {
+        pSoapTree = env->reqxmlDoc;
+    } else if (iReqOrRsp == SOAP_RSP_ELEMENT) {
+        pSoapTree = env->respxmlDoc;
+    } else {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "Not Supported iReqOrRsp [%d]", iReqOrRsp);
+        return (-1);    
+    }
+    
+    if (SoapTreeInit(pSoapTree, sSoapCfgName)){
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "SoapTreeInit Failed");
+        return (-1);
+    }
+    
+    memset(tempValue, 0x00, sizeof(tempValue));
+    memset(rootns, 0x00, sizeof(rootns));
+    sprintf(tempValue, "%s", pSoapTree->root->name);
+    pTmpED = strstr(tempValue, ":");
+    if (pTmpED == NULL) {
+        return (-1);    
+    }
+    memcpy(rootns, tempValue, pTmpED - tempValue);
+        
+    if (iReqOrRsp == SOAP_REQ_ELEMENT) {
+        memset(env->reqRootNS, 0x00, sizeof(env->reqRootNS));
+        memset(env->reqEnvePath, 0x00, sizeof(env->reqEnvePath));
+        memset(env->respBodyPath, 0x00, sizeof(env->respBodyPath));
+        sprintf(env->reqRootNS,"%s", rootns);
+        sprintf(env->reqEnvePath,"%s:Envelope", rootns);
+        sprintf(env->reqHeadPath,"%s/%s:Header", env->reqEnvePath, rootns);
+        sprintf(env->reqBodyPath,"%s/%s:Body",env->reqEnvePath, rootns);
+    } else if(iReqOrRsp == SOAP_RSP_ELEMENT) {
+        memset(env->respRootNS, 0x00, sizeof(env->respRootNS));
+        memset(env->respEnvePath, 0x00, sizeof(env->respEnvePath));
+        memset(env->respBodyPath, 0x00, sizeof(env->respBodyPath));
+        memset(env->respFaultPath, 0x00, sizeof(env->respFaultPath));
+        sprintf(env->respRootNS,"%s", rootns);
+        sprintf(env->respEnvePath,"%s:Envelope", rootns);
+        sprintf(env->respHeadPath,"%s/%s:Header", env->respEnvePath, rootns);
+        sprintf(env->respBodyPath,"%s/%s:Body",env->respEnvePath, rootns);
+    } else {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "Not Supported iReqOrRsp [%d]", iReqOrRsp);
+        return (-1);    
+    }
+    return 0;
+}
+
+
+int SoapGetBodyRootName(SOAPENV *env, char *sRootName, int iReqOrRsp)
+{
+    XML_TREE *tree = NULL;
+    XML_NODE *body = NULL;
+    
+    char bodyXpath[128];
+    memset(bodyXpath, 0x00, sizeof(bodyXpath));
+
+    if (iReqOrRsp == SOAP_REQ_ELEMENT) {
+        tree = env->reqxmlDoc;
+        sprintf(bodyXpath, "/%s", env->reqBodyPath);
+    } else if(iReqOrRsp == SOAP_RSP_ELEMENT) {
+        tree = env->respxmlDoc;
+        sprintf(bodyXpath, "/%s", env->respBodyPath);
+    } else {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "Not Supported iReqOrRsp [%d]", iReqOrRsp);
+        return (-1);    
+    }
+    
+    body = GetXmlNode(tree, bodyXpath);
+    if (body == NULL){
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "NODE[%s] NOT Exist", bodyXpath);
+        return (-1);
+    }
+    if (body->child == NULL){
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "Body Node Has No child");
+        return (-1);    
+    }
+    sprintf(sRootName, "%s", body->child->name);
+    return 0;
+}
+
+/*获取客户化配置数据*/
+int SoapGetVarietyCfg(char *sItemName, char *sItemValue)
+{
+    if (OpenCfgFile(sWebSrvMethod)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "OpenCfgFile[%s.soap]  Failed", sWebSrvMethod);
+        return -1;    
+    }
+
+    if (GetVarietyCfgItem(sItemName, sItemValue)) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetVarietyCfgItem(%s)  Failed", sItemName);
+        CloseCfgFile();
+        return (-1);
+    }
+    
+    if (CloseCfgFile()) {
+        HtLog(sSoapLogName, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "CloseCfgFile  Failed");
+        return -1;    
+    }
+    return 0;
+}

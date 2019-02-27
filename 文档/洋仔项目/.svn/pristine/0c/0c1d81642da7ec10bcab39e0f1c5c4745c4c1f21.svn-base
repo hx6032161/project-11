@@ -1,0 +1,1265 @@
+/*
+ *  Copyright 2006, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  $Id$
+ *
+ *  功能: 客户-服务器通讯相关操作函数
+ *
+ *  Edit History:
+ *
+ *    2008/10/18
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/socket.h> /* for socketpair */
+#include <netinet/in.h>
+#include <limits.h>
+#include "mb.h"
+#include "min_heap.h"
+#include "fd_poll.h"
+#include "Fifo.h"
+
+#define SERVER_MEM_NAME   "SERV"
+#define MAX_FD_NUM        100
+
+#define CLIENT_IDLE_STATE        1   /* client idle state */
+#define CLIENT_READ_SVC_STATE    2   /* client read svc name state */
+#define CLIENT_READ_LEN_STATE    3   /* client read message len state */
+#define CLIENT_READ_MSG_STATE    4   /* client read message state */
+#define CLIENT_HANDLE_REQ_STATE  5   /* client rqst state */ 
+#define CLIENT_WRITE_HEAD_STATE  6   /* client write message header */
+#define CLIENT_WRITE_MSG_STATE   7   /* client write message */ 
+#define CLIENT_HANDLE_END_STATE  8   /* client request process end */
+#define CLIENT_ERROR             9   /* client read/write error */
+
+#define CLIENT_SET_STATE(i, s) (srv_ctrl[idx].client[i].state = (s))
+#define CLIENT_MSG_LEN (sizeof(client_msg_t) + mbctrl->max_msg_len) 
+#define CLIENT_GET_MSG(i) (client_msg_t*)((char*)client_msg + (i) * CLIENT_MSG_LEN)  
+ 
+extern int mb_ctx_local; /* the server allocated context base */
+extern mb_packet_t *mbpacket_snd; /* send packet */
+extern mb_packet_t *mbpacket_rcv; /* receive packet */
+extern svcserver(TPSVCINFO *trans);
+
+typedef struct {
+    int   svc_name_read_len;
+    char  svc_name[MB_MAX_NAME + 1];
+    int   msg_len_read_len;
+    int   msg_len;
+    int   msg_read_len;
+    int   msg_head_write_len;
+    int   msg_write_len;
+	short net_msg_len;
+    mb_net_rsp_t net_rsp;
+    char  msg[1];
+} client_msg_t; 
+
+typedef struct {
+    int            fd;   /* socket fd */
+    int            fdndx;/* fd POLLIN event */
+    int            fdndx_out; /* fd POLLOUT event */
+    unsigned int   cd;   /* connect counter */
+    int            state;/* client current state */
+    struct in_addr addr; /* connect remote address */
+    unsigned int   min_heap_idx;  /* for managing timeouts */
+    struct timeval ev_time;      /* for save the client idle time */
+} client_conn_t;
+
+typedef struct {
+    pid_t          pid;           /* handle process id */
+    int            fd_write;      /* pipe out fd */ 
+    int            fd_read;       /* pipe in fd */
+    unsigned int   connect_fds;   /* total client number */
+    int            cd_min;        /* min cd allocated to this process */
+	unsigned int   counter_start; 
+	unsigned int   counter_curr; 
+	unsigned int   counter_end;
+    int            fdndx;         /* listen fd event */
+    struct fifo    fifo;          /* fifo buffer */
+    client_conn_t  client[MAX_FD_NUM]; /* client table */
+} srv_handle_t;
+
+struct data_head {
+    unsigned int index;
+    unsigned int len;
+}; 
+
+static srv_handle_t   *srv_ctrl = NULL;
+static unsigned char  *msg_buffer = NULL;
+static unsigned int   msg_buffer_size;
+static int            client_max;
+static int            max_msg_num;
+static fd_poll        poll_fds; 
+static int            num, idletime;
+static min_heap_t     min_heap;
+static int            idx;
+static int            listen_socket;
+static int            svc_timeout;
+static client_msg_t   *client_msg; /* client msg */
+
+static int create_worker_process(int i);
+
+static int x_sock_set_block(int sock, int on)
+{
+    int val;
+    int rv;
+    
+    val = fcntl(sock, F_GETFL, 0);
+    if (on) {
+        rv = fcntl(sock, F_SETFL, ~O_NONBLOCK&val);
+    } else {
+        rv = fcntl(sock, F_SETFL, O_NONBLOCK|val);
+    }
+    if (rv) {
+        return errno;
+    }
+
+    return 0;
+}
+
+static void child_exit(int sig)
+{
+    int   i, Status, rv;
+    pid_t nPid;
+
+    sighold(SIGTERM);
+
+    while (1) {
+        nPid = waitpid((pid_t)(-1), &Status, WNOHANG|WUNTRACED);
+        if (nPid <= 0) break;
+        LogError("[PARENT]: child process %ld exit", nPid);
+        for (i = 0; i < num; ++i) {
+            if (srv_ctrl[i].pid == nPid)
+                break;
+        }
+
+        if (i == num) 
+            continue;
+  
+        close(srv_ctrl[i].fd_write);
+        srv_ctrl[i].pid = 0; 
+        rv = create_worker_process(i);
+        if (rv)
+            LogError("create_worker_process %d error %d", i, rv);
+    }
+
+    sigrelse(SIGTERM);
+}
+   
+static void main_exit(int sig)
+{
+    int i, rv;
+    
+    sigset(SIGCLD, SIG_IGN);
+
+    LogError("[PARENT]: kill all child process");
+
+    for (i = 0; i < num; ++i) {
+        if (srv_ctrl[i].pid > 0) {
+            rv = kill(srv_ctrl[i].pid, SIGTERM);
+            if (rv) {
+                 LogError("[PARENT]: kill child process %ld error, errno is %d", 
+                          srv_ctrl[i].pid, errno);
+            }
+        }
+    }
+
+    sleep(5);
+
+    shm_delete(SERVER_MEM_NAME, (const char*)srv_ctrl);
+    exit(1);
+}
+
+static int srv_timeout_next()
+{
+    struct timeval now, tv;
+    int client_index;
+
+    if ((client_index = min_heap_top(&min_heap)) == -1) {
+        /* if no time-based events are active wait for I/O */
+        return -1;
+    }
+
+    util_gettimeofday(&now, NULL);
+    util_timerclear(&tv);
+
+    LogInfo("ev_time %u, now %u", srv_ctrl[idx].client[client_index].ev_time.tv_sec, now.tv_sec);
+
+    /* we have timeout event */
+    if (util_timercmp(srv_ctrl[idx].client[client_index].ev_time.tv_sec, now.tv_sec, <=))
+        return 0;
+
+    util_timersub(&srv_ctrl[idx].client[client_index].ev_time, &now, &tv);
+    LogInfo("timeout_next: in %ld seconds", tv.tv_sec);
+    return tv.tv_sec * 1000;
+}
+
+static int client_get_new_connection()
+{
+    int i;
+
+    for (i = 0; i < MAX_FD_NUM; ++i) {
+        if (srv_ctrl[idx].client[i].fd == -1)
+            return i;
+    }
+
+    return -1;
+} 
+
+static int client_find_index_byfd(int fd)
+{
+    int i;
+
+    for (i = 0; i < MAX_FD_NUM; ++i) {
+        if (srv_ctrl[idx].client[i].fd == fd)
+            return i;
+    }
+
+    return -1;
+}
+
+static int client_find_index_bycd(int cd)
+{
+    int i;
+
+    for (i = 0; i < MAX_FD_NUM; ++i) {
+        if (srv_ctrl[idx].client[i].cd == cd)
+            return i;
+    }
+
+    return -1;
+}
+
+static int client_init(int client_index, int fd)
+{
+    int rv;
+    struct sockaddr_in name;
+    struct timeval     now, tv;
+    unsigned int namelen = sizeof(name);
+
+    /* client init */
+    memset(&srv_ctrl[idx].client[client_index], 0, sizeof(client_conn_t));
+    srv_ctrl[idx].client[client_index].fd = fd;
+    srv_ctrl[idx].client[client_index].cd = srv_ctrl[idx].counter_curr;
+	srv_ctrl[idx].counter_curr++;
+	if (srv_ctrl[idx].counter_curr == srv_ctrl[idx].counter_end)
+		srv_ctrl[idx].counter_curr = srv_ctrl[idx].counter_start;
+
+    srv_ctrl[idx].client[client_index].state = CLIENT_IDLE_STATE;
+    srv_ctrl[idx].client[client_index].min_heap_idx = -1;
+    util_timerclear(&srv_ctrl[idx].client[client_index].ev_time);
+    srv_ctrl[idx].client[client_index].fdndx = -1;
+    srv_ctrl[idx].client[client_index].fdndx_out = -1;
+
+    /* connect socket fds increment 1 */
+    srv_ctrl[idx].connect_fds++;
+    LogDebug("[CHILD]: connect fds: %d", srv_ctrl[idx].connect_fds);
+   
+    /* connect socket fds over the limit */
+    if (srv_ctrl[idx].connect_fds >= client_max) {
+        LogInfo("[CHILD]: delete listen socket event");
+        /* delete the listen event */
+        rv = fd_poll_event_del(&poll_fds, srv_ctrl[idx].fdndx, listen_socket);
+        if (rv) {
+            LogError("[CHILD]: fd_poll_event_del listen socket error %d", rv);
+            return -1;
+        }
+        srv_ctrl[idx].fdndx = -1;
+    }
+
+    /* add new connect fd  to poll_fds */
+    rv = fd_poll_event_add(&poll_fds, -1, fd, POLLIN);
+    if (rv < 0) {
+        LogError("[CHILD]: fd_poll_event_add error %d", rv);
+        return -1;
+    }
+    srv_ctrl[idx].client[client_index].fdndx = rv; 
+
+    /* get connect client info */
+    rv = getpeername(fd, (struct sockaddr*)&name, &namelen);
+    if (rv) {
+        LogError("[CHILD]: getpeername error %d", errno);
+        return -1;
+    }
+    memcpy(&srv_ctrl[idx].client[client_index].addr, &name.sin_addr, 
+           sizeof(struct in_addr));
+
+    /* set idle time */
+    if (idletime > 0) {
+        /* get current time */
+        util_timerclear(&tv);
+        tv.tv_sec = idletime;
+        util_gettimeofday(&now, NULL);
+    
+        /* set idle ts */
+        util_timeradd(&now, &tv, &srv_ctrl[idx].client[client_index].ev_time);
+
+        rv = min_heap_push(&min_heap, client_index);
+        if (rv) {
+            LogError("[CHILD]: min_heap_push error %d", rv);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static int client_free(int client_index)
+{
+    int rv;
+
+    /* delete this fd POLLIN event */
+    if (srv_ctrl[idx].client[client_index].fdndx >= 0) {
+        rv = fd_poll_event_del(&poll_fds, srv_ctrl[idx].client[client_index].fdndx, 
+                               srv_ctrl[idx].client[client_index].fd);
+        if (rv)
+            LogError("[CHILD]: fd_poll_event_del error %d", rv);
+    }
+
+    /* delete this fd POLLOUT event */
+    if (srv_ctrl[idx].client[client_index].fdndx_out >= 0) {
+        rv = fd_poll_event_del(&poll_fds, srv_ctrl[idx].client[client_index].fdndx_out, 
+                               srv_ctrl[idx].client[client_index].fd);
+        if (rv)
+            LogError("[CHILD]: fd_poll_event_del error %d", rv);
+    }
+
+    /* erase the event from min heap */
+    if (srv_ctrl[idx].client[client_index].min_heap_idx >= 0) {
+        min_heap_erase(&min_heap, client_index);
+    }
+
+    shutdown(srv_ctrl[idx].client[client_index].fd, 2);
+    close(srv_ctrl[idx].client[client_index].fd);
+    srv_ctrl[idx].client[client_index].fd = -1;
+    srv_ctrl[idx].client[client_index].cd = 0;
+    srv_ctrl[idx].client[client_index].state = CLIENT_IDLE_STATE;
+    memset(&srv_ctrl[idx].client[client_index].addr, 0, sizeof(struct in_addr));
+    srv_ctrl[idx].client[client_index].min_heap_idx = -1;
+    util_timerclear(&srv_ctrl[idx].client[client_index].ev_time);
+    srv_ctrl[idx].client[client_index].fdndx = -1;
+    srv_ctrl[idx].client[client_index].fdndx_out = -1;
+
+    /* connect socket fds decrement 1 */
+    srv_ctrl[idx].connect_fds--;
+
+    /* reselect the listen socket */
+    if (srv_ctrl[idx].fdndx == -1 && srv_ctrl[idx].connect_fds < client_max) {
+        /* add the listen event */
+        rv = fd_poll_event_add(&poll_fds, -1, listen_socket, POLLIN);
+        if (rv < 0)
+            LogError("[CHILD]: fd_poll_event_add listen socket error %d", rv);
+        else
+            srv_ctrl[idx].fdndx = rv;
+    }
+
+    return 0;
+}
+
+static int server_connection_accept(int fd)
+{
+    int rv, client_index, socket;
+    struct sockaddr_in socket_addr;
+
+    /* accept new connection request */
+    memset(&socket_addr, 0, sizeof(socket_addr));
+    rv = nCListenAccept(fd, &socket, &socket_addr);
+    if (rv) {
+        if (errno != EAGAIN && errno != EWOULDBLOCK)
+            LogError("listen socket error %d %s", errno, strerror(errno));
+        return -1;
+    }
+
+    LogInfo("[CHILD]: client socket %d %s connect", socket, inet_ntoa(socket_addr.sin_addr));
+
+    /* set the socket non-block mode */
+    x_sock_set_block(socket, 0);
+
+    /* allocate new client connection */
+    rv = client_get_new_connection();
+    if (rv < 0) {
+        LogError("[CHILD]: client_get_new_connection error, client over max limit");
+        close(socket);
+        return -1;
+    }
+    client_index = rv;
+    LogDebug("[CHILD]: allocate client slot: %d", client_index);
+
+    /* client socket fd init */
+    rv = client_init(client_index, socket);
+    if (rv) {
+        LogError("[CHILD]: client_init error %d", rv);
+        client_free(client_index);
+    }
+
+    return 0;
+}
+
+static int server_handle_pipe()
+{
+    int rv, client_index;
+    struct data_head data_head;
+    client_msg_t *p_msg;    
+    int    cd;
+    char   aa[4];
+
+    LogInfo("work process %d pipe read fd recv event", idx);
+
+    /* read from pipe the message position */
+    rv = read(srv_ctrl[idx].fd_read, (char *)&data_head, sizeof(data_head));
+    if (rv < 0) {
+        LogError("[CHILD]: read error, errno is %d %s", errno, strerror(errno));
+        if (errno != EAGAIN && errno != EWOULDBLOCK)
+            exit(-1);
+        return -1;
+    }
+
+    /* validate the data_head */
+    if (rv != sizeof(data_head)) {
+        LogError("[CHILD]: pipe read return %d, expect %d", rv, sizeof(data_head));
+        exit(-1);
+    }
+   
+    /* validate the data len */ 
+    if (data_head.len < 0 || data_head.len > mbctrl->max_msg_len) {
+        LogError("[CHILD]: pipe read data len %d, max len %d",
+                 data_head.len, sizeof(mb_packet_t) + mbctrl->max_msg_len);
+        exit(-1);
+    }
+
+    LogInfo("recv data head %u len %u", data_head.index, data_head.len);
+
+    /* copy the message from fifo */
+    memset(mbpacket_rcv, 0, sizeof(mb_packet_t) + mbctrl->max_msg_len);
+    /* get data from fifo buffer */
+    rv = fifo_get_bypos(&srv_ctrl[idx].fifo, data_head.index, data_head.len, 
+						(unsigned char*)(mbpacket_rcv->data));
+    if (rv != data_head.len) {
+        LogError("[CHILD]: fifo_get_bypos pos %d len %d error %d",
+                 data_head.index, data_head.len, rv);
+        return -1;
+    }
+    mbpacket_rcv->len = data_head.len;
+
+    memcpy(aa, mbpacket_rcv->data + 3, 2);
+    memcpy(aa + 2, mbpacket_rcv->data + 1, 2);
+    cd = *(int*)aa;
+    LogDebug("reply message cd %d", cd);
+
+    /* get the client owned this message */
+    rv = client_find_index_bycd(cd);
+    if (rv < 0) {
+        LogError("[CHILD]: cd %d client_find_index_bycd error %d", cd, rv);
+        return -1;
+    }
+    client_index = rv;
+    LogDebug("[CHILD]: clien %d own this message", client_index);
+
+    /* release the cd */
+    srv_ctrl[idx].client[client_index].cd = 0;
+
+    p_msg = CLIENT_GET_MSG(client_index);
+    p_msg->msg_len = mbpacket_rcv->len + sizeof(short);
+    p_msg->net_msg_len = htons(mbpacket_rcv->len);
+	memcpy(p_msg->msg, &p_msg->net_msg_len, sizeof(short));
+    memcpy(p_msg->msg + sizeof(short), mbpacket_rcv->data, p_msg->msg_len);
+    
+    /* add POLLOUT event */
+    rv = fd_poll_event_add(&poll_fds, -1, 
+                           srv_ctrl[idx].client[client_index].fd, 
+                           POLLOUT);
+    if (rv < 0) {
+        LogError("[CHILD]: fd_poll_event_add error %d", rv);
+        return -1;
+    }
+    srv_ctrl[idx].client[client_index].fdndx_out = rv; 
+
+    /* set client state */
+    CLIENT_SET_STATE(client_index, CLIENT_WRITE_HEAD_STATE);
+
+	/* unregister svc timeout time */
+    if (srv_ctrl[idx].client[client_index].min_heap_idx >= 0) {
+        rv = min_heap_erase(&min_heap, client_index);
+        if (rv)
+            LogError("[CHILD]: min_heap_erase error %d", rv);
+    }
+
+    return 0;
+}
+
+static int client_read(int fd, int tot_len, int *read_len, char *read_buffer)
+{
+    int rv, len, err;
+
+    if (*read_len > tot_len) {
+        LogError("client_read read_len %d, tot_len %d error", *read_len, tot_len);
+        return -1;
+    }
+
+    if (*read_len == tot_len) 
+        return 1;
+ 
+    len = tot_len - *read_len;
+    rv = nCSocketRcv(fd, read_buffer + *read_len, &len, 0); 
+    if (rv) {
+        err = errno;
+        LogError("nCSocketRcv error %d errno %d", rv, errno);
+        if (err == EAGAIN || err == EWOULDBLOCK) {
+            *read_len += len;
+            return 0;
+        }
+        if (rv != -1) 
+            LogError("[CHILD]: recv socket error %d %s\n", errno, strerror(err));
+        return -1;
+    }
+    
+    *read_len += len;
+    return 1;
+}
+
+static int client_write(int fd, int tot_len, int *write_len, char *write_buffer)
+{
+    int rv, len;
+
+    if (*write_len > tot_len) {
+        LogError("client_write write_len %d, tot_len %d error", *write_len, tot_len);  
+        return -1;
+    }
+
+    if (*write_len == tot_len)
+        return 1;
+
+    len = tot_len - *write_len;
+    rv = nCSocketSnd(fd, write_buffer + *write_len, &len);
+    if (rv) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            *write_len += len;
+            return 0;
+        }
+        LogError("[CHILD]: send socket error %d %s\n", errno, strerror(errno));
+        return -1;
+    }
+
+    *write_len += len;
+    return 1;
+}
+
+static int client_write_head(int client_index)
+{
+    int rv, len, fd;
+    client_msg_t *p_msg;
+
+    p_msg = CLIENT_GET_MSG(client_index);
+    fd = srv_ctrl[idx].client[client_index].fd;
+    return client_write(fd, sizeof(short), &p_msg->msg_head_write_len, (char*)&p_msg->net_msg_len);
+}
+
+static int client_write_msg(int client_index)
+{
+    int rv, len, fd;
+    client_msg_t *p_msg;
+ 
+    p_msg = CLIENT_GET_MSG(client_index);
+    fd = srv_ctrl[idx].client[client_index].fd;
+    LogDebug("msglen %d, msg_write_len %d", p_msg->msg_len, p_msg->msg_write_len);
+    return client_write(fd, p_msg->msg_len, 
+                        &p_msg->msg_write_len, 
+                        p_msg->msg);
+}
+
+static int client_read_svc(int client_index)
+{
+    int rv, fd;
+    client_msg_t *p_msg;
+
+    p_msg = CLIENT_GET_MSG(client_index);
+    fd = srv_ctrl[idx].client[client_index].fd;
+    return client_read(fd, MB_MAX_NAME + 1, &p_msg->svc_name_read_len, 
+                       p_msg->svc_name);
+}
+
+static int client_read_len(int client_index)
+{
+    int rv, fd;
+    client_msg_t *p_msg;
+
+    p_msg = CLIENT_GET_MSG(client_index);
+    fd = srv_ctrl[idx].client[client_index].fd;
+    return client_read(fd, sizeof(short), 
+                       &p_msg->msg_len_read_len, 
+                       (char*)&p_msg->net_msg_len); 
+}
+
+static int client_read_msg(int client_index)
+{
+    int rv, fd;
+    client_msg_t *p_msg;
+
+    p_msg = CLIENT_GET_MSG(client_index);
+    fd = srv_ctrl[idx].client[client_index].fd;
+    return client_read(fd, p_msg->msg_len,
+                       &p_msg->msg_read_len,
+                       (char*)(p_msg->msg));
+}
+
+static int client_acall_svc(int client_index)
+{
+    int rv, i;
+    client_msg_t *p_msg;
+  
+    p_msg = CLIENT_GET_MSG(client_index);
+    
+    rv = mb_acall("svcclient", p_msg->msg, p_msg->msg_len, MB_NOREPLY);
+    if (rv < 0) {
+        LogError("[CHILD]: mb_acall error %d\n", mb_errno);
+        return -1;
+    }
+
+    return 0;
+} 
+
+static int server_handle_reply(int fd)
+{
+    int rv, client_index, done = 0;
+    struct timeval tv, now;
+
+    LogInfo("work process %d fd %d recv POLLOUT event", idx, fd);
+
+    client_index = client_find_index_byfd(fd);
+    if (client_index < 0) {
+        LogError("[CHILD]: FATAL ERROR client_find_index_byfd %d error", fd);
+        exit(-1);
+    }
+    LogInfo("work process %d client reply, client index %d", idx, client_index);
+
+    while (done == 0) {
+        switch (srv_ctrl[idx].client[client_index].state) {
+        case CLIENT_WRITE_HEAD_STATE:
+#if 0
+            rv = client_write_head(client_index);
+            if (rv < 0) { /* write error */
+                CLIENT_SET_STATE(client_index, CLIENT_ERROR);
+                break;
+            }
+#endif
+			rv = 1;
+            if (rv > 0) {
+                LogInfo("work process %d client %d write head complete", idx, client_index);
+                CLIENT_SET_STATE(client_index, CLIENT_WRITE_MSG_STATE);
+                break;
+            }
+            done = 1;
+            break;
+        case CLIENT_WRITE_MSG_STATE:
+            rv = client_write_msg(client_index);
+            if (rv < 0) { /* write error */    
+                CLIENT_SET_STATE(client_index, CLIENT_ERROR);
+                break;
+            }
+            if (rv > 0) {
+                LogInfo("work process %d client %d write msg complete", idx, client_index);
+                CLIENT_SET_STATE(client_index, CLIENT_HANDLE_END_STATE);
+                break;
+            }
+            done = 1;
+            break;
+        case CLIENT_HANDLE_END_STATE:
+            /* delete POLLOUT event */
+            rv = fd_poll_event_del(&poll_fds, srv_ctrl[idx].client[client_index].fdndx_out, fd);
+            if (rv) {
+                LogError("[CHILD]: fd_poll_event_del socket error %d", rv);
+                CLIENT_SET_STATE(client_index, CLIENT_ERROR);
+                break;
+            }
+            srv_ctrl[idx].client[client_index].fdndx_out = -1;
+            
+            if (idletime > 0) {
+                /* get current time */
+                util_timerclear(&tv);
+                tv.tv_sec = idletime;
+                util_gettimeofday(&now, NULL);
+
+                /* set idle ts */
+                util_timeradd(&now, &tv, &srv_ctrl[idx].client[client_index].ev_time);
+
+                /* add fd idle time */
+                rv = min_heap_push(&min_heap, client_index);
+                if (rv) {
+                    LogError("[CHILD]: min_heap_push error %d", rv);
+                    CLIENT_SET_STATE(client_index, CLIENT_ERROR);
+                    break;
+                }
+            }
+            CLIENT_SET_STATE(client_index, CLIENT_IDLE_STATE);
+            done = 1;
+            break;
+        case CLIENT_ERROR:
+            client_free(client_index);
+            return -1;
+        default:
+            LogError("write event, now client state %d error", 
+                     srv_ctrl[idx].client[client_index].state);
+            client_free(client_index);
+            return -1;
+        } 
+    }
+    
+    return 0;
+}         
+          
+static int server_handle_request(int fd)
+{
+    int rv, client_index, done = 0, recv_flag = 0;
+    struct timeval tv, now;
+    client_msg_t *p_msg;
+
+    LogInfo("work process %d fd %d recv POLLIN event", idx, fd);
+
+    client_index = client_find_index_byfd(fd);
+    if (client_index < 0) {
+        LogError("[CHILD]: FATAL ERROR client_find_index_byfd %d error", fd);
+        exit(-1);
+    }
+    LogInfo("work process %d client request, client index %d", idx, client_index);
+    p_msg = CLIENT_GET_MSG(client_index);
+
+    while (done == 0) {
+        switch (srv_ctrl[idx].client[client_index].state) {
+        case CLIENT_IDLE_STATE:    
+            CLIENT_SET_STATE(client_index, CLIENT_READ_LEN_STATE);
+            memset(p_msg, 0, CLIENT_MSG_LEN); 
+            break;
+        case CLIENT_READ_SVC_STATE:
+            rv = client_read_svc(client_index);
+            if (rv < 0) { /* read error */
+                CLIENT_SET_STATE(client_index, CLIENT_ERROR);
+                break;
+            }
+            if (rv > 0) {  /* read svc end */
+                LogDebug("[CHILD]: recv svcname %s", p_msg->svc_name);
+                CLIENT_SET_STATE(client_index, CLIENT_READ_LEN_STATE);
+                break;
+            }
+            done = 1;
+            break;
+        case CLIENT_READ_LEN_STATE:
+            rv = client_read_len(client_index);
+            if (rv < 0) { /* read error */
+                CLIENT_SET_STATE(client_index, CLIENT_ERROR);
+                break;
+            }
+            if (rv > 0) { /* read len end */
+                LogInfo("len: %X", p_msg->net_msg_len);
+                p_msg->msg_len = ntohs(p_msg->net_msg_len);
+                LogInfo("len %d", p_msg->msg_len);
+                if (p_msg->msg_len <= 0 || p_msg->msg_len > mbctrl->max_msg_len) {
+                    LogError("[CHILD]: recv buf len %d invalid", p_msg->msg_len);
+                    CLIENT_SET_STATE(client_index, CLIENT_ERROR);
+                    break; 
+                }
+                CLIENT_SET_STATE(client_index, CLIENT_READ_MSG_STATE);
+                break;
+            }
+            done = 1;
+            break;
+        case CLIENT_READ_MSG_STATE:
+            rv = client_read_msg(client_index);
+            if (rv < 0) { /* read error */
+                CLIENT_SET_STATE(client_index, CLIENT_ERROR);
+                break;
+            }
+            if (rv > 0) { /* read message end */
+                CLIENT_SET_STATE(client_index, CLIENT_HANDLE_REQ_STATE);
+		/* add msg header */
+		LogError("client cd: %d", srv_ctrl[idx].client[client_index].cd);
+		memcpy(p_msg->msg + 1, (char*)(&srv_ctrl[idx].client[client_index].cd), sizeof(int));
+                recv_flag = 1;
+                break;
+            }
+            done = 1;
+            break;
+        case CLIENT_HANDLE_REQ_STATE:
+            if (recv_flag == 0) { /* 接收到SOCKET接收通知 */
+        	LogInfo("[CHILD]: recv event POLLIN in CLIENT_HANDLE_REQ_STATE, Close Socket");
+        	CLIENT_SET_STATE(client_index, CLIENT_ERROR);
+                break;
+            }  
+            rv = client_acall_svc(client_index);
+            if (rv) { /* acall error */
+                 CLIENT_SET_STATE(client_index, CLIENT_ERROR);
+                 break;
+            }
+
+            /* add svc time out monitor */ 
+            if (srv_ctrl[idx].client[client_index].min_heap_idx >= 0) {
+                /* erase old fd idle time */
+                rv = min_heap_erase(&min_heap, client_index);
+                if (rv)
+                    LogError("[CHILD]: min_heap_erase error %d", rv);
+            }
+
+            /* get current time */
+            util_timerclear(&tv);
+            tv.tv_sec = svc_timeout;
+            util_gettimeofday(&now, NULL);
+
+            /* set svc timeout ts */
+            util_timeradd(&now, &tv, &srv_ctrl[idx].client[client_index].ev_time);
+
+            /* add svc timeout time */
+            rv = min_heap_push(&min_heap, client_index);
+            if (rv)
+                LogError("[CHILD]: min_heap_push error %d", rv);
+
+            done = 1;
+            break;
+        case CLIENT_ERROR:
+            client_free(client_index);
+            return -1;
+        default:
+            LogError("read event, now client state %d error", 
+                     srv_ctrl[idx].client[client_index].state);
+            client_free(client_index);
+            return -1;
+        } 
+    }
+    
+    return 0;
+}          
+
+static void srv_timeout_process()
+{
+    int rv, client_index, cd;
+    struct timeval now;
+
+    if (min_heap_empty(&min_heap))
+        return;
+
+    util_gettimeofday(&now, NULL);
+    while ((client_index = min_heap_top(&min_heap)) != -1) {
+        if (util_timercmp(srv_ctrl[idx].client[client_index].ev_time.tv_sec, now.tv_sec, >))
+            break;
+  
+        /* svc timeout */
+        if (srv_ctrl[idx].client[client_index].state == CLIENT_HANDLE_REQ_STATE) {
+            client_free(client_index);
+        } else if (srv_ctrl[idx].client[client_index].state == CLIENT_IDLE_STATE) {
+            LogError("client %d idle time over limit", client_index);
+            client_free(client_index);
+        } else {
+            LogError("client %d timeout", client_index); 
+            client_free(client_index);
+        }
+    }
+}
+
+static void srv_rw_process()
+{
+    int rv, fdndx = -1, event, fd, client_index;
+
+    while (1) { 
+        fdndx = fd_poll_next_fdndx(&poll_fds, fdndx);
+        if (fdndx < 0)
+            break;
+
+        event = fd_poll_get_revent(&poll_fds, fdndx);
+        fd = fd_poll_get_fd(&poll_fds, fdndx);
+
+        LogInfo("fd %d receive event %d", fd, event);
+
+        if (fd == listen_socket && (event & POLLIN)) {  /* listen socket event */
+            /* accept new connection request */
+            server_connection_accept(fd);
+        } else if (srv_ctrl[idx].fd_read == fd && (event & POLLIN)) { /* read pipe event */
+            server_handle_pipe();
+        } else if (event & POLLIN) { /* client request */
+            server_handle_request(fd);
+        } else if (event & POLLOUT) { /* client reply */
+            server_handle_reply(fd);
+        } else {
+            LogError("fd %d receive except event: %d", fd, event);
+            client_index = client_find_index_byfd(fd);
+            if (client_index < 0) {
+                LogError("[CHILD]: FATAL ERROR client_find_index_byfd %d error", fd);
+                exit(-1);
+            }  
+            client_free(client_index);
+        }
+    }
+}
+    
+static void child_function(int i)
+{
+    int rv, timeout, j;
+    char sLogFile[128];
+
+    idx = i;
+    sprintf(sLogFile, "Server.%d.log", i);
+    trace_set_name(sLogFile);
+
+    /* allocate client msg buffer */ 
+    client_msg = (client_msg_t*)calloc(MAX_FD_NUM, CLIENT_MSG_LEN);
+    if (client_msg == NULL) {
+        LogError("[CHILD calloc CLIENT MSG error %d %s", errno, strerror(errno));
+        exit(1);
+    }
+ 
+    /* save the mbpcsid, we should set the mbpcsid to -1, 
+     * before we call mb_init */ 
+    j = mbpcsid;
+    mbpcsid = -1;
+
+    /* mb init */
+    rv = mb_init();
+    if (rv) {
+        LogError("[CHILD] mb_init error: %d", mb_errno);
+        exit(1);
+    } 
+    srv_ctrl[idx].cd_min = mb_ctx_local;
+    /* restore mbpcsid */
+    mbpcsid = j;
+   
+    LogInfo("fifo in %d fifo out %d fifo size %d",
+            srv_ctrl[i].fifo.in, srv_ctrl[i].fifo.out, srv_ctrl[i].fifo.size);   
+    
+    /* add listen socket to poll event */
+    rv = fd_poll_event_add(&poll_fds, -1, listen_socket, POLLIN);
+    if (rv < 0) {
+        LogError("[CHILD] fd_poll_event_add error: %d", rv);
+        exit(1);
+    }
+    srv_ctrl[idx].fdndx = rv;
+
+    for (j = 0; j < MAX_FD_NUM; ++j)
+        srv_ctrl[idx].client[j].fd = -1;
+ 
+    /* add pipe fd_read for fd input */
+    rv = fd_poll_event_add(&poll_fds, -1, srv_ctrl[i].fd_read, POLLIN);
+    if  (rv < 0) {
+         LogError("[CHILD] fd_poll_event_add error: %d", rv);
+         exit(1);
+    }
+  
+    for ( ; ; ) {
+        LogInfo("[CHILD] work process %d enter poll.......", i);
+        timeout = srv_timeout_next();       
+        rv = fd_poll_poll(&poll_fds, timeout);
+        LogInfo("fd_poll_poll return %d", rv); 
+        if (rv == -1) { /* poll error */
+            if (errno == EINTR) continue;
+            LogError("poll error: %d %s", errno, strerror(errno));
+            exit(1);
+        }
+
+        if (rv == 0) { /* timeout */
+            srv_timeout_process();
+            continue;
+        }
+
+        /* work process handle request */
+        srv_rw_process();
+    }
+}
+
+static int get_worker_process_index(int cd)
+{
+    int i;
+
+    for (i = 0; i < num; ++i) {
+        if (cd >= srv_ctrl[i].counter_start &&
+            cd <  srv_ctrl[i].counter_end)
+            return i;
+    }
+
+    return -1;
+}
+ 
+int GetIdleTime(int client_index)
+{
+    return srv_ctrl[idx].client[client_index].ev_time.tv_sec;
+}
+
+void SetMinHeapIdx(int client_index, int i)
+{
+    srv_ctrl[idx].client[client_index].min_heap_idx = i;
+}
+
+int GetMinHeapIdx(int client_index)
+{
+    return srv_ctrl[idx].client[client_index].min_heap_idx;
+}
+
+static int create_pipe(int *sockpair, int read_on, int write_on)
+{
+    int rv;
+
+    /* create pipe for send fd */
+    rv = socketpair(AF_UNIX, SOCK_STREAM, 0, sockpair);
+    if (rv < 0) {
+        LogError("Call socketpair error, errno is %d %s", errno, strerror(errno));
+        return -1;
+    }
+    /* set fd mode */
+    rv = x_sock_set_block(sockpair[1], write_on);
+    if (rv) {
+        LogError("Call x_sock_set_block error, errno is %d %s", errno, strerror(errno));
+        close(sockpair[1]);
+        close(sockpair[0]);
+        return -1;
+    }
+    rv = x_sock_set_block(sockpair[0], read_on);
+    if (rv) {
+        LogError("Call x_sock_set_block error, errno is %d %s", errno, strerror(errno));
+        close(sockpair[1]);
+        close(sockpair[0]);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int create_worker_process(int i)
+{
+    int    rv;
+    int    sockpair[2];
+    pid_t  pid;
+    int    counter_num;
+
+    memset(&srv_ctrl[i], 0, sizeof(srv_handle_t));
+ 
+    /* create pipe for send fd */
+    rv = create_pipe(sockpair, 0, 0);
+    if (rv)
+        return -1;
+
+    LogInfo("process %d fd_write %d fd_read %d", i, sockpair[1], sockpair[0]);
+
+    srv_ctrl[i].fd_write = sockpair[1];
+    srv_ctrl[i].fd_read  = sockpair[0];
+    rv = fifo_init(&srv_ctrl[i].fifo, msg_buffer + i * msg_buffer_size, 
+                   msg_buffer_size); 
+    if (rv) {
+        LogError("fifo init error %d", rv);
+        close(srv_ctrl[i].fd_write);
+        close(srv_ctrl[i].fd_read);
+        return -1;
+    }
+    LogInfo("fifo in %d fifo out %d fifo size %d",
+            srv_ctrl[i].fifo.in, srv_ctrl[i].fifo.out, srv_ctrl[i].fifo.size);
+
+    counter_num = INT_MAX / num;
+    srv_ctrl[i].counter_start = i * counter_num;
+	srv_ctrl[i].counter_end = srv_ctrl[i].counter_start + counter_num - 1;
+    if (srv_ctrl[i].counter_start == 0)
+		srv_ctrl[i].counter_start++;
+    srv_ctrl[i].counter_curr = srv_ctrl[i].counter_start;
+	LogInfo("process %d counter_start %u counter_curr %u counter_end %u",
+			i, srv_ctrl[i].counter_start, srv_ctrl[i].counter_curr,
+			srv_ctrl[i].counter_end);
+
+    pid = fork();
+    if (pid < 0) {
+        LogError("fork error %d %s\n", errno, strerror(errno));
+        close(srv_ctrl[i].fd_write);
+        close(srv_ctrl[i].fd_read);
+        return -1;
+    }
+
+    if (pid == 0) {
+        close(srv_ctrl[i].fd_write);
+        sigset(SIGTERM, SIG_DFL);
+        child_function(i);
+        exit(0);
+    }
+
+    close(srv_ctrl[i].fd_read);
+    srv_ctrl[i].pid = pid;
+    return 0;
+}
+
+#define align_power(addr, align)        \
+  (((addr) + (1 << (align)) - 1) & (((unsigned int)-1) << (align)))
+
+int leftmost_bits(int a)
+{
+    int i;
+
+    for (i = 0; i < 32; ++i) {
+        if (a & (0x80000000 >> i))
+            return (32 - i);
+    }
+
+    return 0;
+}
+
+tpsvrinit(int argc,char ** argv)
+{
+    int    rv;
+    int    fd;
+    int    i;
+    int    port;
+    int    ch;
+    int    queid, srv_index, cd;
+    unsigned int size;
+    struct data_head data_head;;
+
+    opterr = 0;
+    idletime = 0;
+    client_max = 10;
+    max_msg_num = 100;
+    svc_timeout = 20;
+    while ((ch = getopt(argc - 2, argv + 2, "p:n:t:x:m:s:")) != -1) {
+        switch (ch) {
+        case 'p':
+            port = atoi(optarg);
+            LogInfo("server listen port %d\n", port);
+            break;
+        case 'n':
+            num = atoi(optarg);
+            if (num <= 0) {
+                LogError("USAGE %s -p PORT -n NUMBER -t IDLETIME -x CLIENT\n", argv[0]);
+                return -1;
+            }
+            LogInfo("server fork work process %d\n", num);
+            break;
+        case 't': 
+            idletime = atoi(optarg);
+            LogInfo("client max ldle time %d\n", idletime);
+            break;
+        case 'x':
+            client_max = atoi(optarg);
+            if (client_max > MAX_FD_NUM)
+                client_max = MAX_FD_NUM;
+            LogInfo("max client per work process %d\n", client_max);
+            break;
+        case 'm':
+            max_msg_num = atoi(optarg);
+            LogInfo("max msg num per work process %d\n", max_msg_num);
+            break;
+        case 's':
+            svc_timeout = atoi(optarg);
+            LogInfo("svc_timeout %d\n", svc_timeout);
+            break;
+        }
+    }
+
+    /* create listen socket */ 
+    rv = nCEstablishBind(port, "0.0.0.0", &listen_socket);
+    if (rv) {
+        LogError("bind socket error %d %s\n", errno, strerror(errno));
+        exit(2);
+    }
+    
+    /* set listen socket non-block */
+    rv = x_sock_set_block(listen_socket, 0);
+    if (rv) {
+        LogError("Call x_sock_set_block error, errno is %d %s", errno, strerror(errno));
+        exit(3);
+    }
+
+    rv = nCListenPort(listen_socket, 500);
+    if (rv) {
+        LogError("listen socket error %d %s\n", errno, strerror(errno));
+        exit(4);
+    }
+
+    rv = leftmost_bits((sizeof(mb_packet_t) + mbctrl->max_msg_len) * max_msg_num);
+    msg_buffer_size = align_power((sizeof(mb_packet_t) + mbctrl->max_msg_len) * max_msg_num, rv - 1);
+    LogInfo("message buffer size: %d", msg_buffer_size);
+    size = sizeof(srv_handle_t) * num + msg_buffer_size * num;
+    LogInfo("share memory size %u", size);
+    srv_ctrl = (srv_handle_t*)shm_create(SERVER_MEM_NAME, size); 
+    if (srv_ctrl == NULL) {
+        LogError("shm_create %s error %d %s\n", SERVER_MEM_NAME,
+                 errno, strerror(errno));
+        exit(6);
+    }
+    memset(srv_ctrl, 0, size);
+    msg_buffer = (unsigned char*)&srv_ctrl[num];
+
+	if (mb_advertise("svccomm", svcserver)) {
+	    LogError("tpadvertise error %d %s", tperrno, tpstrerror(tperrno));
+		exit(7);
+	}
+
+    min_heap_ctor(&min_heap);
+
+    sigset(SIGCLD, child_exit);
+
+    sighold(SIGCLD);
+
+    /* fork worker process */
+    LogInfo("fork %d worker process\n", num);
+    for (i = 0; i < num; ++i) {
+        rv = create_worker_process(i);
+    }
+
+    sigrelse(SIGCLD);
+	 
+    return 0;
+}
+
+void tpsvrdone()
+{
+    main_exit(0);
+    LogInfo("=======================server exit======================");
+	return;
+}
+
+
+svcserver(TPSVCINFO *trans)
+{
+    int    rv;
+    int    fd;
+    int    i;
+    int    port;
+    int    ch;
+    int    queid, srv_index, cd;
+    unsigned int size;
+    struct data_head data_head;;
+    char   aa[4];
+
+    memcpy(aa, trans->data + 3, 2);
+    memcpy(aa + 2, trans->data + 1, 2);
+
+    cd = *(int*)aa;
+    LogDebug("reply message cd: %d", cd);
+    srv_index = get_worker_process_index(cd);
+    if (srv_index < 0) {
+        LogError("reply message cd %d get worker process index error, drop it", cd);
+        mb_return(MB_FAIL, 0, trans->data, trans->len, 0); 
+    }
+    LogInfo("worker process %d own this reply message", srv_index);
+
+    memset(&data_head, 0, sizeof(data_head));
+    data_head.len = fifo_put(&srv_ctrl[srv_index].fifo, (unsigned char *)trans->data, 
+                             trans->len, &data_head.index);
+    if (data_head.len == 0) {
+        LogError("reply message cd %d fifo_put error, no enough space, drop it", cd);
+        mb_return(MB_FAIL, 0, trans->data, trans->len, 0); 
+    }
+
+    LogInfo("send data head %u len %u", data_head.index, data_head.len);
+
+    rv = write(srv_ctrl[srv_index].fd_write, &data_head, sizeof(data_head));
+    if (rv != sizeof(data_head)) {
+        LogError("notify message write pipe error %d %s", errno, strerror(errno));
+        mb_return(MB_FAIL, 0, trans->data, trans->len, 0); 
+    }
+    mb_return(MB_SUCCESS, 0, trans->data, trans->len, 0); 
+}

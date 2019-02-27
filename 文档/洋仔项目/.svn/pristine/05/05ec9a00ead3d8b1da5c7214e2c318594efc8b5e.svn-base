@@ -1,0 +1,32 @@
+/*
+ *  Copyright 2006, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  function:db.h
+ *
+ *  Edit History:
+ *
+ *     2011/07/18 -gendb
+ */
+
+#ifndef _TBL_TXN_ALGO_RULE_DEF_H
+#define _TBL_TXN_ALGO_RULE_DEF_H
+/*   Default values for table tbl_txn_algo_rule.    */
+#define	id_DEF	0
+#define	card_tp_DEF	"     "
+#define	txn_num_DEF	"    "
+#define	matchstr_DEF	"                         "
+#define	algo_id_DEF	"     "
+#define	param_flag_DEF	"                                "
+#define	rec_opr_id_DEF	" "
+#define	rec_upd_opr_DEF	"           "
+#define	rec_crt_ts_DEF	"              "
+#define	rec_upd_ts_DEF	"              "
+
+#endif

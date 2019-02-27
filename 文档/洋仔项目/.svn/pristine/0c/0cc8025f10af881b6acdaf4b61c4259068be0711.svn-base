@@ -1,0 +1,1125 @@
+/*
+ *  Copyright 2008, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *
+ *  功能: 对账
+ *  修改： HT @ 2013/3/30
+ *
+ *  Edit History:
+ *
+ */
+
+/*****************************************************************************/
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <math.h>
+
+#include "DbsDef.h"
+#include "HtLog.h"
+#include "pos_stlm.h"
+#include "DbsDef.h"
+#include "DbsTbl.h"
+#include "ErrCode.h"
+#include "HtLog.h"
+#include "TxnNum.h"
+#include "POSdb.h"
+#include "pos_stlm.h"
+#include "BatchMem.h"
+#include "memFun.h"
+
+#define INIT_LENGTH  1
+
+int bdt_in_dtl_weixin_err_gc(bth_wx_txn_def sBthWeiXinTxn ,bth_gc_txn_succ_def sGcTxnSucc ,char * date,char * stlm)
+{
+	int iRet;
+	char sTmp[16 + 1] = { 0 };
+	char datetime[14 + 1] = { 0 };
+	char sCardFlag[2+1] = { 0 };
+
+	bth_dtl_err_gc_def stBthdtlerrgc;
+	Tbl_mcht_settle_inf_Def tMchtSettleInf;
+
+	memset(&stBthdtlerrgc ,0x00, sizeof(bth_dtl_err_gc_def));
+	DbsBTH_DTL_ERR_GC(DBS_INIT, &stBthdtlerrgc);
+
+        /* modify by zky 20170512 manage_inst -> 0000 */
+	memcpy(stBthdtlerrgc.manage_inst, "0000", sizeof(stBthdtlerrgc.manage_inst));
+	memcpy(stBthdtlerrgc.date_settlmt ,date,strlen(date));
+
+	memcpy(stBthdtlerrgc.acq_txn_status,sGcTxnSucc.trans_state,sizeof(sGcTxnSucc.trans_state));
+	memcpy(stBthdtlerrgc.acq_atm_stlm,sGcTxnSucc.amt_settlmt,sizeof(sGcTxnSucc.amt_settlmt));
+	memcpy(stBthdtlerrgc.acq_mcht_fee,sGcTxnSucc.mcht_fee,sizeof(sGcTxnSucc.mcht_fee));
+	/* 收单系统交易终端号 */
+	memcpy(stBthdtlerrgc.acq_term_id,sGcTxnSucc.card_accp_term_id,sizeof(sGcTxnSucc.card_accp_term_id));
+	memcpy(stBthdtlerrgc.acq_stlm_date,sGcTxnSucc.date_settlmt_8,sizeof(sGcTxnSucc.date_settlmt_8));
+
+	memcpy(stBthdtlerrgc.out_sys,"WX",sizeof(stBthdtlerrgc.out_sys));
+	memcpy(stBthdtlerrgc.out_stlm_date,sBthWeiXinTxn.date_settlmt,sizeof(sBthWeiXinTxn.date_settlmt));
+
+	/*modify by lcy 添加空值的判断*/
+	if (sGcTxnSucc.trans_date_time[0] != ' ' && strlen(sGcTxnSucc.trans_date_time) > 0 )
+	{	
+		/*收单系统交易日期*/
+		memcpy(stBthdtlerrgc.acq_txn_date,sGcTxnSucc.date_local_trans,sizeof(sGcTxnSucc.date_local_trans));
+		/*收单系统交易时间*/
+		memcpy(stBthdtlerrgc.acq_txn_time,sGcTxnSucc.time_local_trans,sizeof(sGcTxnSucc.time_local_trans));
+		memcpy(stBthdtlerrgc.trans_date_time,sGcTxnSucc.trans_date_time,sizeof(sGcTxnSucc.trans_date_time));
+	}
+	else
+	{
+		/*收单系统交易日期*/
+		memcpy(stBthdtlerrgc.acq_txn_date,sBthWeiXinTxn.trans_date, sizeof(sBthWeiXinTxn.trans_date));
+		/*收单系统交易时间*/
+		memcpy(stBthdtlerrgc.acq_txn_time, sBthWeiXinTxn.trans_date_time, sizeof(sBthWeiXinTxn.trans_date_time));
+		memcpy(stBthdtlerrgc.trans_date_time,sBthWeiXinTxn.trans_date + 4, 4);
+		memcpy(stBthdtlerrgc.trans_date_time + 4,sBthWeiXinTxn.trans_date_time,6);
+	}
+
+	memcpy(stBthdtlerrgc.acq_inst_id_code ,sGcTxnSucc.acq_inst_id_code,strlen(sGcTxnSucc.acq_inst_id_code));
+	memcpy(stBthdtlerrgc.fwd_inst_id_code ,sGcTxnSucc.fwd_inst_id_code,strlen(sGcTxnSucc.fwd_inst_id_code));
+	memcpy(stBthdtlerrgc.processing_code ,"000000",6);
+	memcpy(stBthdtlerrgc.acq_amt_trans,sGcTxnSucc.amt_trans,strlen(sGcTxnSucc.amt_trans));
+	memcpy(stBthdtlerrgc.acq_mcht_cd,sGcTxnSucc.card_accp_id,strlen(sGcTxnSucc.card_accp_id));
+	memcpy(stBthdtlerrgc.card_accp_id,sGcTxnSucc.card_accp_id,strlen(sGcTxnSucc.card_accp_id));
+	memcpy(stBthdtlerrgc.card_accp_term_id,sGcTxnSucc.card_accp_term_id,strlen(sGcTxnSucc.card_accp_term_id));
+
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"card_accp_term_id[%s]", stBthdtlerrgc.card_accp_term_id); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"card_accp_id[%s]", stBthdtlerrgc.card_accp_id ); 
+	/*存放我方流水号*/
+	if(strlen(sBthWeiXinTxn.txn_seq_id))
+	{
+            CommonRTrim(sBthWeiXinTxn.txn_seq_id);
+            if(strlen(sBthWeiXinTxn.txn_seq_id)<9)
+            {
+		memcpy(stBthdtlerrgc.out_ssn ,sBthWeiXinTxn.txn_seq_id,sizeof(stBthdtlerrgc.out_ssn) - 1);
+		memcpy(stBthdtlerrgc.acq_txn_ssn,sBthWeiXinTxn.txn_seq_id + 2, 6);
+            }
+            else
+            {
+		memcpy(stBthdtlerrgc.out_ssn ,sBthWeiXinTxn.txn_seq_id +12,8);
+		memcpy(stBthdtlerrgc.acq_txn_ssn,sBthWeiXinTxn.txn_seq_id + 15, 6);
+            }
+	}
+	else if (strlen(sGcTxnSucc.key_cup))
+	{
+            if(strlen(sGcTxnSucc.key_cup)<9)
+            {
+		memcpy(stBthdtlerrgc.acq_txn_ssn,sGcTxnSucc.key_cup + 2, 6);
+		memcpy(stBthdtlerrgc.out_ssn ,sGcTxnSucc.term_ssn, sizeof(stBthdtlerrgc.out_ssn) - 1);
+            }
+            else
+            {
+		memcpy(stBthdtlerrgc.acq_txn_ssn,sGcTxnSucc.key_cup + 15, 6);
+		memcpy(stBthdtlerrgc.out_ssn ,sGcTxnSucc.term_ssn+12, 8);
+            }
+	}
+	else
+	{
+		memcpy(stBthdtlerrgc.out_ssn    ," ",1 );
+	}
+
+
+	memcpy(stBthdtlerrgc.term_ssn ,sGcTxnSucc.term_ssn,strlen(sGcTxnSucc.term_ssn));
+
+	memcpy(stBthdtlerrgc.inst_date ,stBthdtlerrgc.acq_txn_date,strlen(stBthdtlerrgc.acq_txn_date));
+	memcpy(stBthdtlerrgc.inst_time,stBthdtlerrgc.acq_txn_time,strlen(stBthdtlerrgc.acq_txn_time));
+	memcpy(stBthdtlerrgc.host_ssn ,sGcTxnSucc.host_ssn,strlen(sGcTxnSucc.host_ssn));
+	memcpy(stBthdtlerrgc.host_date ,sGcTxnSucc.host_date,strlen(sGcTxnSucc.host_date));
+	
+	/*微信转换交易代码*/
+	if (sGcTxnSucc.txn_num[0] != ' ' && strlen(sGcTxnSucc.txn_num) > 0)
+	{	
+		memcpy(stBthdtlerrgc.acq_txn_num,sGcTxnSucc.txn_num,sizeof(sGcTxnSucc.txn_num));
+		memcpy(stBthdtlerrgc.txn_num ,sGcTxnSucc.txn_num,strlen(sGcTxnSucc.txn_num));
+		memcpy(stBthdtlerrgc.gc_txn_num ,sGcTxnSucc.txn_num,strlen(sGcTxnSucc.txn_num));
+	}
+	else
+	{
+		memcpy(stBthdtlerrgc.acq_txn_num,sBthWeiXinTxn.txn_num,sizeof(sBthWeiXinTxn.txn_num));
+		memcpy(stBthdtlerrgc.txn_num ,sBthWeiXinTxn.txn_num,strlen(sBthWeiXinTxn.txn_num));
+		memcpy(stBthdtlerrgc.gc_txn_num ,sBthWeiXinTxn.txn_num,strlen(sBthWeiXinTxn.txn_num));
+	}
+
+	memcpy(stBthdtlerrgc.msg_type," ",1);
+
+	memcpy(stBthdtlerrgc.mchnt_type  ,sGcTxnSucc.mchnt_type,strlen(sGcTxnSucc.mchnt_type));
+	memcpy(stBthdtlerrgc.pos_cond_code ," ",1);
+	memcpy(stBthdtlerrgc.channel_num  ," ",1);
+	memcpy(stBthdtlerrgc.authr_id_resp ,sGcTxnSucc.authr_id_resp ,strlen(sGcTxnSucc.authr_id_resp));
+	memcpy(stBthdtlerrgc.resp_code ," ", 1);
+	memcpy(stBthdtlerrgc.host_recode ," " ,INIT_LENGTH);
+
+	/*基本手续费*/
+	memcpy(stBthdtlerrgc.fee_credit,sBthWeiXinTxn.fee_credit,strlen(sBthWeiXinTxn.fee_credit));
+	memcpy(stBthdtlerrgc.fee_debit, sBthWeiXinTxn.fee_debit,strlen(sBthWeiXinTxn.fee_debit));
+
+	memcpy(stBthdtlerrgc.pos_entry_mode ,sGcTxnSucc.pos_entry_mode,strlen(sGcTxnSucc.pos_entry_mode));
+	strncpy(stBthdtlerrgc.card_accp_addr, sGcTxnSucc.card_accp_name, 40);
+
+	memcpy(stBthdtlerrgc.retrivl_ref ,sGcTxnSucc.retrivl_ref,strlen(sGcTxnSucc.retrivl_ref));
+	memcpy(stBthdtlerrgc.deal_flg  , " " , INIT_LENGTH);
+
+	memcpy(stBthdtlerrgc.currcy_code_trans,sGcTxnSucc.currcy_code_trans,strlen(sGcTxnSucc.currcy_code_trans));
+	memcpy(stBthdtlerrgc.currcy_code_stlm ,sGcTxnSucc.currcy_code_trans ,strlen(sGcTxnSucc.currcy_code_trans));
+
+	/* modify by lcy for 商户手续费   20140902 begin */
+	memset(&tMchtSettleInf, 0x00, sizeof(tMchtSettleInf));
+	memcpy(tMchtSettleInf.mcht_no, sGcTxnSucc.card_accp_id,  sizeof(tMchtSettleInf.mcht_no)-1);
+	iRet = MemDbsTBL_MCHT_SETTLE_INF(DBS_SELECT4, &tMchtSettleInf);
+	if (iRet && iRet != DBS_NOTFOUND)
+	{
+		HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__,
+				"DbsTBL_MCHT_SETTLE_INF DBS_SELECT error :%d. mcht_no[%s].",
+				iRet, tMchtSettleInf.mcht_no);
+		return iRet;
+	}
+
+	memcpy(sCardFlag, "03",2);
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"fee_rate[%s]", tMchtSettleInf.fee_rate);
+	/* 计算手续费都按正交易计算手续费 */
+	iRet = SwtCustGetMchtFee(&tMchtSettleInf, "1101", stBthdtlerrgc.acq_amt_trans, stBthdtlerrgc.mcht_fee, sCardFlag);
+	if( iRet)
+	{
+		HtLog(gsLogFile,HT_LOG_MODE_ERROR,__FILE__,__LINE__,"SwtCustGetMchtFee error,%d,手续费为0",iRet);
+		memcpy(stBthdtlerrgc.mcht_fee, "000000000000", 12);
+		memset(sTmp, 0x00, sizeof(sTmp));
+		memcpy(sTmp, stBthdtlerrgc.mcht_fee, 12);
+	}
+	else
+	{
+		memset(sTmp, 0x00, sizeof(sTmp));
+		memcpy(sTmp, stBthdtlerrgc.mcht_fee, 12);
+	}
+
+	memset(stBthdtlerrgc.mcht_fee, 0x00, sizeof(stBthdtlerrgc.mcht_fee));
+	memcpy(stBthdtlerrgc.mcht_fee , sTmp, 12);
+	memcpy(stBthdtlerrgc.acq_atm_stlm, sGcTxnSucc.amt_settlmt,sizeof(sGcTxnSucc.amt_settlmt));
+	memcpy(stBthdtlerrgc.acq_mcht_fee, sTmp, sizeof(sGcTxnSucc.mcht_fee));
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"sTmpFee=[%s]fee_rate[%s]",stBthdtlerrgc.mcht_fee, tMchtSettleInf.fee_rate);
+	/* modify by lcy for 商户手续费   20140902 end */
+
+	memcpy(stBthdtlerrgc.amt_settlmt ,sGcTxnSucc.amt_settlmt ,strlen(sGcTxnSucc.amt_settlmt));
+	memcpy(stBthdtlerrgc.conv_rate_stlm ,sGcTxnSucc.conv_rate_stlm ,strlen(sGcTxnSucc.conv_rate_stlm));
+	memcpy(stBthdtlerrgc.date_conv ,sGcTxnSucc.date_conv,strlen(sGcTxnSucc.date_conv) );
+	memcpy(stBthdtlerrgc.flag_domestic ,sGcTxnSucc.flag_domestic,strlen(sGcTxnSucc.flag_domestic) );
+	memcpy(stBthdtlerrgc.flag_city, " ", INIT_LENGTH);
+	memcpy(stBthdtlerrgc.area_code, " " , INIT_LENGTH);
+
+	memcpy(stBthdtlerrgc.inst_no, " "  , INIT_LENGTH);
+	memcpy(stBthdtlerrgc.bank_flag, " "  , INIT_LENGTH);
+	memcpy(stBthdtlerrgc.acqu_ins_id_cd, " " , INIT_LENGTH);
+	memcpy(stBthdtlerrgc.cup_ins_id, " " , INIT_LENGTH);
+
+	/* add by lxc 20161227 营销活动放入fee_inst中 */
+	memcpy(stBthdtlerrgc.fee_inst, sGcTxnSucc.replacement_amts, 12);
+
+	/* 对账标志 */
+	memcpy(stBthdtlerrgc.stlm_flag, stlm,strlen(stlm));
+	/* 微信差错处理标志 */
+	memcpy(stBthdtlerrgc.t_0_flag , "0", 1);
+	/* 业务类型 */
+	memcpy(stBthdtlerrgc.txn_acq_type , TXN_ACQ_TYPE_ONLINE_WEIXIN_BDT,1);
+	/* 差错记录状态 */
+	memcpy(stBthdtlerrgc.err_proc_cd  , "01" , 2);
+	/* 处理动作 */
+	memcpy(stBthdtlerrgc.lst_upd_tlr, " "  , INIT_LENGTH);
+
+	CommonGetCurrentTime(datetime);
+	memcpy(stBthdtlerrgc.create_time,datetime,sizeof(datetime));
+	memcpy(stBthdtlerrgc.lst_upd_time, datetime, sizeof(stBthdtlerrgc.lst_upd_time) - 1);
+
+#if 0 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.manage_inst );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.date_settlmt ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_txn_num );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_txn_ssn );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_txn_status ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_pan );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_amt_trans );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_atm_stlm ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_mcht_fee ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_mcht_cd );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_term_id );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_txn_date ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_txn_time ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_stlm_date );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.out_sys );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.out_stlm_date );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.trans_date_time );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.out_ssn );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acq_inst_id_code );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.fwd_inst_id_code );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.term_ssn ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.inst_date );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.inst_time );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.host_ssn ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.host_date );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.gc_txn_num ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.txn_num );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.msg_type ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.processing_code );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.mchnt_type ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.pos_cond_code );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.channel_num );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.pan );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.amt_trans );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.authr_id_resp );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.resp_code );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.host_recode );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.fee_credit ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.fee_debit );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.fee_cdhr ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.fee_inst ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.fee_logo ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.pos_entry_mode ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.card_accp_term_id); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.card_accp_id ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.card_accp_addr ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.retrivl_ref );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.rcvg_code );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.issuer_code );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.deal_flg ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.tran_flg ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.code_xfer_o );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.pan_xfer_o ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.code_xfer_i );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.pan_xfer_i ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.currcy_code_trans); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.currcy_code_stlm );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.amt_settlmt );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.mcht_fee ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.conv_rate_stlm ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.date_conv );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.flag_domestic );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.flag_city );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.area_code );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.inst_no );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.bank_flag );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.acqu_ins_id_cd ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.cup_ins_id ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.bus_date ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.stlm_flag );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.t_0_flag ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.txn_acq_type ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.err_proc_cd );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.lst_upd_tlr );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.create_time );
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.lst_upd_time ); 
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"[%s]", stBthdtlerrgc.pan_type);
+#endif
+
+	/* 插入 对帐不平明细表 */
+	iRet = DbsBTH_DTL_ERR_GC(DBS_INSERT, &stBthdtlerrgc);
+	if(iRet)
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"insert error,iRet[%d]",iRet);
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"insert error[%s]",DbsError());
+
+		return iRet;
+	}
+
+	return 0 ;
+}
+
+/****************************
+  微信和POSP的可疑交易对账:
+  1.posp多
+  2.微信多
+ ****************************/
+int StlmWeiXinSusps(char *sPreDay, char *sDay)
+{
+	int iRet;
+	int iAmtTag;
+	char sSql[1024 + 1];
+	bth_wx_txn_def sBth_WX_Txn_Def;
+	bth_gc_txn_succ_def sGcTxnSucc;
+
+	HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "微信和POSP的可疑交易对账BEGIN...");
+	/* POSP T-1 可疑交易重新对账 */
+	memset(sSql, 0x00, sizeof(sSql));
+	/* TXN_ACQ_TYPE 7 表示线上微信本代他交易 */
+	sprintf(sSql, "select * from bth_gc_txn_succ where DATE_SETTLMT_8 = '%s' and STLM_FLAG = '%s' and TXN_ACQ_TYPE = '%s' ",sPreDay,STLM_CUP_FLG_SUSPICIOUS,TXN_ACQ_TYPE_ONLINE_WEIXIN_BDT);
+	HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "sSql [%s].", sSql);
+
+	iRet = OpenCursorBTH_GC_TXN_SUCC(sSql);
+	if (iRet)
+	{
+		HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "open error iRet = [%s]",  DbsError());
+		return iRet;
+	}
+
+	while (1)
+	{
+		memset((char *)&sGcTxnSucc, 0x00, sizeof(sGcTxnSucc));
+		iRet = FetchCursorBTH_GC_TXN_SUCC(&sGcTxnSucc);
+		if (iRet != 0 && iRet != DBS_NOTFOUND)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, " FETCH cursor error [%s]",  DbsError());
+			CloseCursorBTH_GC_TXN_SUCC();
+			return iRet;
+		}
+		else if (iRet == DBS_NOTFOUND)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "FETCH Data End %d", iRet);
+			break;
+		}
+
+		/* 根据流水表的date_settlmt,term_ssn查找微信本代他成功交易流水表的交易 */
+		memset(&sBth_WX_Txn_Def, 0x00, sizeof(sBth_WX_Txn_Def)); 
+		memcpy(sBth_WX_Txn_Def.date_settlmt, sDay, sizeof(sBth_WX_Txn_Def.date_settlmt)-1 );
+                /* mod by wangt @20171113 */
+		HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "strlen(sGcTxnSucc.term_ssn)[%d]",strlen(sGcTxnSucc.term_ssn)); 
+                CommonRTrim(sGcTxnSucc.key_cup);
+                if(strlen(sGcTxnSucc.key_cup) <9)
+                {
+		    memcpy(sBth_WX_Txn_Def.txn_seq_id, sGcTxnSucc.key_cup, sizeof(sBth_WX_Txn_Def.txn_seq_id)-1);
+                }
+                else
+                {
+                    memcpy(sBth_WX_Txn_Def.txn_seq_id, "J", 1);
+                    memcpy(sBth_WX_Txn_Def.txn_seq_id + 1, sGcTxnSucc.key_cup, 20);
+                }
+		CommonRTrim(sBth_WX_Txn_Def.date_settlmt);
+		CommonRTrim(sBth_WX_Txn_Def.txn_seq_id);
+		HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "date_settlmt_8[%s],txn_seq_id[%s],txn_acq_type[%s]", 
+				sBth_WX_Txn_Def.date_settlmt, sBth_WX_Txn_Def.txn_seq_id, sGcTxnSucc.txn_acq_type);
+
+		/*查询微信线上本代他成功交易流水表中交易*/
+		iRet = DbsBTH_WX_TXN(DBS_SELECT1, &sBth_WX_Txn_Def);
+		if (iRet != 0 && iRet != DBS_NOTFOUND)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "DbsBTH_WX_TXN DBS_SELECT1 error iRet = [%d].", iRet);
+			CloseCursorBTH_GC_TXN_SUCC();
+			return -1;
+		}
+		else if (iRet == DBS_NOTFOUND)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "[%s]POSP有,WeiXin无 POSP交易状态[%s]", sGcTxnSucc.term_ssn,sGcTxnSucc.trans_state);
+			/* POSP有，WeiXin无 */
+			if ( sGcTxnSucc.trans_state[0] == '1')
+			{
+				memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+				memcpy(sGcTxnSucc.stlm_flag, STLM_CUP_FLG_POSP, sizeof(STLM_CUP_FLG_POSP));
+				/* 插入不平明细表 */
+				iRet = bdt_in_dtl_weixin_err_gc(sBth_WX_Txn_Def,sGcTxnSucc,sDay,STLM_CUP_FLG_POSP);
+				if( iRet )
+				{
+					HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"bdt_in_dtl_weixin_err_gc insert error iRet = [%d].", iRet);
+					CloseCursorBTH_GC_TXN_SUCC();
+					return iRet;
+				}
+			}
+			else
+			{
+				memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+				memcpy(sGcTxnSucc.stlm_flag, STLM_FLG_DEL, sizeof(STLM_FLG_DEL));
+			}
+
+			CommonGetCurrentTime(sGcTxnSucc.lst_upd_time);
+			iRet = DbsUsrBTH_GC_TXN_SUCC(DBS_UPDATE, &sGcTxnSucc);
+			if (iRet != 0)
+			{
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "update error iRet = [%s]",  DbsError());
+				CloseCursorBTH_GC_TXN_SUCC();
+				return iRet;
+			}
+		}
+		else if (iRet == 0)
+		{
+			/*找到POSP成功的流水*/
+			HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "找到POSP成功的流水 stlm_flag[%s],trans_state[%s] KEY_CUP[%s]",
+					sGcTxnSucc.stlm_flag,sGcTxnSucc.trans_state,sGcTxnSucc.key_cup);
+
+			if ( sGcTxnSucc.trans_state[0] == '1' )
+			{
+				iAmtTag = 1;
+				/* 核对金额 */ 
+				if (memcmp(sBth_WX_Txn_Def.amt_trans,sGcTxnSucc.amt_trans,12) != 0)
+				{
+					HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "key[%s]amt error",sGcTxnSucc.key_cup);
+					iAmtTag = 0;
+				}
+
+				if (iAmtTag == 1)
+				{
+					/* 对账平 */
+					HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__,  "对账平,插入对账明细表");
+                                        /* mod by wangt @20180226 for T+0 */
+                                        if(memcmp(sGcTxnSucc.lst_upd_tlr + 2, STML_FLG_T0_OK_SUS, 1) == 0)
+                                        {
+                                            memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_FLG_SUSPICIOUS_OK, sizeof(sBth_WX_Txn_Def.stlm_flag) - 1);
+                                            memcpy(sGcTxnSucc.stlm_flag, STML_FLG_T0_OK_SUS_OK, sizeof(sGcTxnSucc.stlm_flag) - 1);
+                                            memcpy(sGcTxnSucc.lst_upd_tlr + 2, STML_FLG_T0_OK_SUS_OK, sizeof(sGcTxnSucc.stlm_flag) - 1);
+                                            memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+                                        }
+                                        else if(memcmp(sGcTxnSucc.lst_upd_tlr + 2, STML_FLG_T0_ERR_SUS, 1) == 0)
+                                        {
+                                            memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_FLG_SUSPICIOUS_OK, sizeof(sBth_WX_Txn_Def.stlm_flag) - 1);
+                                            memcpy(sGcTxnSucc.stlm_flag, STML_FLG_T0_ERR_SUS_OK, sizeof(sGcTxnSucc.stlm_flag) - 1);
+                                            memcpy(sGcTxnSucc.lst_upd_tlr + 2, STML_FLG_T0_ERR_SUS_OK, sizeof(sGcTxnSucc.stlm_flag) - 1);
+                                            memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+                                        }
+                                        else
+                                        {
+					    memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_FLG_SUSPICIOUS_OK, sizeof(sBth_WX_Txn_Def.stlm_flag) - 1);
+					    memcpy(sGcTxnSucc.stlm_flag, STLM_FLG_SUSPICIOUS_OK, sizeof(sGcTxnSucc.stlm_flag) - 1);
+					    memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+                                        }
+				}
+				else
+				{
+					/* 更新当天POSP成功交易流水表的对账结果不一致 */
+					memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_CUP_FLG_DISTRUST, sizeof(sBth_WX_Txn_Def.stlm_flag) - 1);
+					memcpy(sGcTxnSucc.stlm_flag, STLM_CUP_FLG_DISTRUST, sizeof(sGcTxnSucc.stlm_flag) - 1);
+					memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+
+					/* 插入不平明细表 */
+					iRet = bdt_in_dtl_weixin_err_gc(sBth_WX_Txn_Def,sGcTxnSucc,sDay,STLM_CUP_FLG_DISTRUST);
+					if( iRet )
+					{
+						HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"bdt_in_dtl_weixin_err_gc insert error iRet = [%d].", iRet);
+						CloseCursorBTH_GC_TXN_SUCC();
+						return iRet;
+					}
+				}
+			}
+			else
+			{
+				/* POSP faile 单边帐 微信有 POSP无 */
+				memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_CUP_FLG_CUPS, sizeof(STLM_CUP_FLG_CUPS));
+				memcpy(sGcTxnSucc.stlm_flag, STLM_CUP_FLG_CUPS, sizeof(STLM_CUP_FLG_CUPS));
+				memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "WeiXin有 POSP失败 插入不平表 KEY_CUP[%s]",sGcTxnSucc.stlm_flag, sGcTxnSucc.key_cup);
+				/* 插入不平明细表 */
+				iRet = bdt_in_dtl_weixin_err_gc(sBth_WX_Txn_Def,sGcTxnSucc,sDay,STLM_CUP_FLG_CUPS);
+				if( iRet )
+				{
+					HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"bdt_in_dtl_weixin_err_gc insert error iRet = [%d].", iRet);
+					CloseCursorBTH_GC_TXN_SUCC();
+					return iRet;
+				}
+			}
+
+			strncpy(sGcTxnSucc.fee_credit, sBth_WX_Txn_Def.fee_credit, 12);
+			strncpy(sGcTxnSucc.fee_debit, sBth_WX_Txn_Def.fee_debit, 12);
+			CommonGetCurrentTime(sGcTxnSucc.lst_upd_time);
+			iRet = DbsUsrBTH_GC_TXN_SUCC(DBS_UPDATE, &sGcTxnSucc);
+			if (iRet != 0)
+			{
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "update error iRet = [%d].", iRet);
+				CloseCursorBTH_GC_TXN_SUCC();
+				return iRet;
+			}
+
+			CommonRTrim(sBth_WX_Txn_Def.key_cup);
+			CommonGetCurrentTime(sBth_WX_Txn_Def.lst_upd_time);
+			iRet = DbsBTH_WX_TXN(DBS_UPDATE, &sBth_WX_Txn_Def);
+			if (iRet != 0)
+			{
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "update error iRet = [%d].", iRet);
+				CloseCursorBTH_GC_TXN_SUCC();
+				return iRet;
+			}
+		}
+	}
+	iRet = CloseCursorBTH_GC_TXN_SUCC();
+	if (iRet)
+	{
+		HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "close error iRet = [%s]",  DbsError());
+		return iRet;
+	}
+
+#if 0
+//微信多的都做差错处理掉
+	/**********
+	 **微信多**
+	 **********/
+
+	HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "微信方可疑交易对账BEGIN...");
+	/* WeiXin T-1 可疑交易重新对账 */
+	memset(sSql, 0x00, sizeof(sSql));
+	sprintf(sSql, "select * from bth_wx_txn where STLM_FLAG = '%s' and DATE_SETTLMT = '%s'", STLM_CUP_FLG_SUSPICIOUS, sPreDay);
+
+	HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "sSql [%s].", sSql);
+
+	iRet = OpenCursorBTH_WX_TXN(sSql);
+	if (iRet)
+	{
+		HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "open error iRet = [%s]",  DbsError());
+		return iRet;
+	}
+
+	while (1)
+	{
+		HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "比对可疑交易" ); 
+		memset(&sBth_WX_Txn_Def, 0x00, sizeof(sBth_WX_Txn_Def)); 
+
+		iRet = FetchCursorBTH_WX_TXN(&sBth_WX_Txn_Def);
+		if (iRet != 0 && iRet != DBS_NOTFOUND)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, " FETCH cursor error [%s]",  DbsError());
+			CloseCursorBTH_WX_TXN();
+			return iRet;
+		}
+		else if (iRet == DBS_NOTFOUND)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "FETCH Data End %d", iRet);
+			break;
+		}
+
+		/*根据流水表的key_cup查找微信本代他成功交易流水表的交易 */
+		memset((char *)&sGcTxnSucc, 0, sizeof(sGcTxnSucc));
+		CommonRTrim(sBth_WX_Txn_Def.key_cup);
+
+		memcpy(sGcTxnSucc.date_settlmt_8, sDay, 8);
+		memcpy(sGcTxnSucc.key_cup, sBth_WX_Txn_Def.key_cup, strlen(sBth_WX_Txn_Def.key_cup));
+		memcpy(sGcTxnSucc.key_cup,sDay,8);
+
+		HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "date_settlmt_8[%s].:key_cup[%s]", sGcTxnSucc.date_settlmt_8, sGcTxnSucc.key_cup);
+
+		/*查询微信线上本代他成功交易流水表中交易*/
+		iRet = DbsBTH_GC_TXN_SUCC(DBS_SELECT2, &sGcTxnSucc);
+		if (iRet != 0 && iRet != DBS_NOTFOUND)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "DbsBTH_WX_TXN select error iRet = [%d].", iRet);
+			HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "[%s]",  DbsError());
+			CloseCursorBTH_WX_TXN();
+			return -1;
+		}
+		else if (iRet == DBS_NOTFOUND)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__,"key[%s]POSP无,WeiXin有",sGcTxnSucc.key_cup);
+			/* POSP无，WeiXin有*/
+			memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+			memcpy(sBth_WX_Txn_Def.date_settlmt, sDay, sizeof(sDay));
+			memcpy(sGcTxnSucc.stlm_flag, STLM_CUP_FLG_CUPS, sizeof(STLM_CUP_FLG_CUPS));
+			memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_CUP_FLG_CUPS, sizeof(STLM_CUP_FLG_CUPS));
+
+			/*lcy test*/
+			/*add by lcy 20150331 从线上订单表查询交易信息 (主要是获取交易具体的商户用于查询商户计费代码计费)*/
+			memcpy(sGcTxnSucc.term_ssn, sBth_WX_Txn_Def.txn_seq_id , 8);
+			HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "sys_seq_num[%s]", sGcTxnSucc.term_ssn);
+			iRet = DbsBTH_GC_TXN_SUCC(DBS_SELECT22,&sGcTxnSucc);
+			if(iRet && iRet != DBS_NOTFOUND)
+			{
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsBTH_GC_TXN_SUCC error:%d",iRet);
+				return -1;
+			}
+			memcpy(sGcTxnSucc.acq_swresved, "03", 2);
+
+			/* 插入不平明细表 */
+			iRet = bdt_in_dtl_weixin_err_gc(sBth_WX_Txn_Def,sGcTxnSucc,sDay,STLM_CUP_FLG_CUPS);
+			if( iRet )
+			{
+				HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"bdt_in_dtl_weixin_err_gc insert error iRet = [%d].", iRet);
+				CloseCursorBTH_WX_TXN();				
+				return iRet;
+			}
+
+			iRet = DbsBTH_WX_TXN(DBS_UPDATE1, &sBth_WX_Txn_Def);
+			if (iRet != 0)
+			{
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "update error iRet = [%d].", iRet);
+				CloseCursorBTH_WX_TXN();
+				return iRet;
+			}
+
+
+		}
+		else if (iRet == 0)
+		{
+			/*找到POSP成功的流水*/
+			HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__, "微信可疑,找到收单流水[%s]trans_state[%s] KEY_CUP[%s]",sGcTxnSucc.term_ssn,sGcTxnSucc.trans_state,sGcTxnSucc.key_cup);
+
+			if ( sGcTxnSucc.trans_state[0] == '1' )
+			{
+
+				iAmtTag = 1;
+				/* 核对金额 */ 
+				if (memcmp(sBth_WX_Txn_Def.amt_trans,sGcTxnSucc.amt_trans,12) != 0)
+				{
+					HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "key[%s]amt error",sGcTxnSucc.key_cup);
+					iAmtTag = 0;
+				}
+
+				if (iAmtTag == 1)
+				{
+					/* 对账平 */
+					HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__,  "对账平,插入对账明细表");
+					memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_FLG_SUSPICIOUS_OK, sizeof(sBth_WX_Txn_Def.stlm_flag) - 1);
+					memcpy(sGcTxnSucc.stlm_flag, STLM_FLG_SUSPICIOUS_OK, sizeof(sGcTxnSucc.stlm_flag) - 1);
+					memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+				}
+				else
+				{
+					/* 更新当天POSP成功交易流水表的对账结果不一致 */
+					memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_CUP_FLG_DISTRUST, sizeof(sBth_WX_Txn_Def.stlm_flag) - 1);
+					memcpy(sGcTxnSucc.stlm_flag, STLM_CUP_FLG_DISTRUST, sizeof(sGcTxnSucc.stlm_flag) - 1);
+					memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+
+					/* 插入不平明细表 */
+					iRet = bdt_in_dtl_weixin_err_gc(sBth_WX_Txn_Def,sGcTxnSucc,sDay,STLM_CUP_FLG_DISTRUST);
+					if( iRet )
+					{
+						HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"bdt_in_dtl_weixin_err_gc insert error iRet = [%d].", iRet);
+						CloseCursorBTH_WX_TXN();                                                
+						return iRet;
+					}
+				}
+			}
+			else
+			{
+				/* 收单失败、微信有,单边帐*/
+				memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_CUP_FLG_CUPS, sizeof(STLM_CUP_FLG_CUPS));
+				memcpy(sGcTxnSucc.stlm_flag, STLM_CUP_FLG_CUPS, sizeof(STLM_CUP_FLG_CUPS));
+				memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "WeiXin有 POSP失败 插入不平表 KEY_CUP[%s]",sGcTxnSucc.key_cup);
+				/* 插入不平明细表 */
+				iRet = bdt_in_dtl_weixin_err_gc(sBth_WX_Txn_Def,sGcTxnSucc,sDay,STLM_CUP_FLG_CUPS);
+				if( iRet )
+				{
+					HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"bdt_in_dtl_weixin_err_gc insert error iRet = [%d].", iRet);
+					CloseCursorBTH_WX_TXN();                                        
+					return iRet;
+				}
+			}
+
+			strncpy(sGcTxnSucc.fee_credit, sBth_WX_Txn_Def.fee_credit, 12);
+			strncpy(sGcTxnSucc.fee_debit, sBth_WX_Txn_Def.fee_debit, 12);
+			iRet = DbsUsrBTH_GC_TXN_SUCC(DBS_UPDATE, &sGcTxnSucc);
+			if (iRet != 0)
+			{
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "update error iRet = [%d].", iRet);
+				CloseCursorBTH_WX_TXN();                                
+				return iRet;
+			}
+
+			CommonRTrim(sBth_WX_Txn_Def.key_cup);
+			iRet = DbsBTH_WX_TXN(DBS_UPDATE, &sBth_WX_Txn_Def);
+			if (iRet != 0)
+			{
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "update error iRet = [%d].", iRet);
+				CloseCursorBTH_WX_TXN();                                
+				return iRet;
+			}
+		}
+	}
+	iRet = CloseCursorBTH_WX_TXN();
+	if (iRet)
+	{
+		HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "close error iRet = [%s]",  DbsError());
+		return iRet;
+	}
+#endif
+
+	DbsCommit();
+	HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "微信和POSP的可疑交易对账OVER...");
+	return 0;
+}
+
+/* POSP与WeiXin当天交易流水核对 */
+int StlmWeiXin(char *sPreDay, char *sDay)
+{
+	int iRet;
+	int iAmtTag, iPanTag;
+	char sSql[1024];
+	char sLen[2 + 1] = { 0 };
+	double cupAmt = 0.0;
+	double succAmt = 0.0;
+	double dAmt = 0.0;
+	char sAmt[12 + 1] = { 0 };	
+
+	bth_wx_txn_def sBth_WX_Txn_Def;
+	bth_gc_txn_succ_def sGcTxnSucc;
+
+	HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "****************微信对账开始*****************");
+
+	memset(sSql, 0x00, sizeof(sSql));
+	sprintf(sSql, "select * from bth_gc_txn_succ where DATE_SETTLMT_8 = '%s' and STLM_FLAG = '%s' and TXN_ACQ_TYPE = '%s' ",sDay, STLM_FLG_NOCHK, TXN_ACQ_TYPE_ONLINE_WEIXIN_BDT);
+	HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "sSql[%s].", sSql);
+
+	iRet = OpenCursorBTH_GC_TXN_SUCC(sSql);
+	if (iRet)
+	{
+		HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "open error iRet = [%d].", iRet);
+		return iRet;
+	}
+
+	while (1)
+	{
+		memset((char *)&sGcTxnSucc, 0x00, sizeof(sGcTxnSucc));
+		iRet = FetchCursorBTH_GC_TXN_SUCC(&sGcTxnSucc);
+		if (iRet != 0 && iRet != DBS_NOTFOUND)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, " FETCH cursor error [%s]", DbsError());
+			CloseCursorBTH_GC_TXN_SUCC();
+			return iRet;
+		}
+		else if (iRet == DBS_NOTFOUND)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "FETCH cursor %d", iRet);
+			break;
+		}
+
+		/* 根据流水表的key_cup查找微信本代他流水表的交易 */
+		memset(&sBth_WX_Txn_Def, 0, sizeof(sBth_WX_Txn_Def));
+		memcpy(sBth_WX_Txn_Def.date_settlmt, sDay, sizeof(sBth_WX_Txn_Def.date_settlmt));
+		memcpy(sBth_WX_Txn_Def.key_cup, sGcTxnSucc.key_cup, sizeof(sBth_WX_Txn_Def.key_cup) - 1);
+		CommonRTrim(sBth_WX_Txn_Def.date_settlmt);
+		CommonRTrim(sBth_WX_Txn_Def.key_cup);
+
+		HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "key_cup[%s] :txn_acq_type[%s]", sGcTxnSucc.key_cup, sGcTxnSucc.txn_acq_type);
+
+		/* 查询微信本代他流水表中交易*/
+		iRet = DbsBTH_WX_TXN(DBS_SELECT, &sBth_WX_Txn_Def);
+		if (iRet != 0 && iRet != DBS_NOTFOUND)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "error[%s].", DbsError());
+			CloseCursorBTH_GC_TXN_SUCC();
+			return -1;
+		}
+		else if (iRet == DBS_NOTFOUND)
+		{
+			/* WeiXin无, POSP有的单边帐情况 */
+                        /* mod by wangt @20171116 */
+			//if(sGcTxnSucc.trans_state[0] == '0' || sGcTxnSucc.trans_state[0] == '1' || sGcTxnSucc.trans_state[0] == '3') 
+			if(sGcTxnSucc.trans_state[0] == '1' || sGcTxnSucc.trans_state[0] == '3') 
+			{
+				/* 成功和超时交易进对帐可疑*/
+				memcpy(sGcTxnSucc.stlm_flag, STLM_CUP_FLG_SUSPICIOUS, sizeof(STLM_CUP_FLG_SUSPICIOUS));
+				HtLog(gsLogFile,HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "可疑 ssn[%s]", sGcTxnSucc.term_ssn);
+			}
+			else
+			{
+				/* 更新为清理标识 */
+				memcpy(sGcTxnSucc.stlm_flag, STLM_FLG_DEL, sizeof(STLM_FLG_DEL));
+			}
+
+			CommonGetCurrentTime(sGcTxnSucc.lst_upd_time);
+			iRet = DbsUsrBTH_GC_TXN_SUCC(DBS_UPDATE, &sGcTxnSucc);
+			if (iRet != 0)
+			{
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "update error iRet = [%d].", iRet);
+				CloseCursorBTH_GC_TXN_SUCC();
+				return iRet;
+			}
+		}
+		else if (iRet == 0)
+		{                         
+			if((sGcTxnSucc.trans_state[0] == '1' ))
+			{
+				/* 核对金额 */
+				iAmtTag = 1;
+
+				/* 核对金额 */
+				if (memcmp(sBth_WX_Txn_Def.amt_trans,sGcTxnSucc.amt_trans,12) != 0) 
+				{
+					HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "key_cup[%s]Amt error",sBth_WX_Txn_Def.key_cup);
+					iAmtTag = 0;
+				}
+				/* 对账平的情况插入到对账明细表 */
+				if (iAmtTag == 1)
+				{
+					/*更新当天POSP成功交易流水表的对账结果对平 */
+					HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "对账平");
+					memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_FLG_OK, sizeof(STLM_FLG_OK));
+					memcpy(sGcTxnSucc.stlm_flag, STLM_FLG_OK, sizeof(STLM_FLG_OK));
+					memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+					HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "stlm_flag[%s],KEY_CUP[%s]",sGcTxnSucc.stlm_flag,sGcTxnSucc.key_cup);
+				}
+				else
+				{
+					HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "对账不一致");
+
+					/* 更新当天POSP成功交易流水表的对账结果不一致 */
+					memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_CUP_FLG_DISTRUST, sizeof(STLM_CUP_FLG_DISTRUST));
+					memcpy(sGcTxnSucc.stlm_flag, STLM_CUP_FLG_DISTRUST, sizeof(STLM_CUP_FLG_DISTRUST));
+					memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+					HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "stlm_flag[%s],KEY_CUP[%s]",sGcTxnSucc.stlm_flag,sGcTxnSucc.key_cup);
+					/* 插入不平明细表 */
+					iRet = bdt_in_dtl_weixin_err_gc(sBth_WX_Txn_Def,sGcTxnSucc,sDay,STLM_CUP_FLG_DISTRUST);
+					if( iRet )
+					{
+						HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"bdt_in_dtl_weixin_err_gc insert error iRet = [%d].", iRet);
+						CloseCursorBTH_GC_TXN_SUCC();
+						return iRet;
+					}
+				}
+			}
+			else
+			{
+				/* POSP faile 单边帐 微信有 POSP失败 */
+				HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "对账不一致,插入对账不平明细表");
+
+				/*更新当天POSP成功交易流水表的对账结果不一致 */
+				memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_CUP_FLG_CUPS, sizeof(STLM_CUP_FLG_CUPS));
+				memcpy(sGcTxnSucc.stlm_flag, STLM_CUP_FLG_CUPS, sizeof(STLM_CUP_FLG_CUPS));
+				memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+				HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "stlm_flag[%s],KEY_CUP[%s]",sGcTxnSucc.stlm_flag,sGcTxnSucc.key_cup);
+
+				iRet = bdt_in_dtl_weixin_err_gc(sBth_WX_Txn_Def,sGcTxnSucc,sDay,STLM_CUP_FLG_CUPS);  
+				if( iRet != 0 )
+				{                 
+					HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"insert error iRet = [%d].",iRet);
+					CloseCursorBTH_GC_TXN_SUCC();
+					return iRet;
+				}
+			}
+
+			/* fee_credit , fee_debit */
+			strncpy(sGcTxnSucc.fee_credit, sBth_WX_Txn_Def.fee_credit, 12);
+			strncpy(sGcTxnSucc.fee_debit, sBth_WX_Txn_Def.fee_debit, 12);
+
+			CommonGetCurrentTime(sGcTxnSucc.lst_upd_time);
+			iRet = DbsUsrBTH_GC_TXN_SUCC(DBS_UPDATE, &sGcTxnSucc);
+			if (iRet != 0)
+			{
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "update error iRet = [%d].", iRet);
+				CloseCursorBTH_GC_TXN_SUCC();
+				return iRet;
+			}
+
+			CommonGetCurrentTime(sBth_WX_Txn_Def.lst_upd_time);
+			CommonRTrim(sBth_WX_Txn_Def.key_cup);
+			iRet = DbsBTH_WX_TXN(DBS_UPDATE, &sBth_WX_Txn_Def);
+			if (iRet != 0)
+			{
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "update DbsBTH_WX_TXN error iRet = [%s]",  DbsError());
+				HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "stlm_flag[%s],KEY_CUP[%s]", sBth_WX_Txn_Def.stlm_flag, sBth_WX_Txn_Def.key_cup);
+				CloseCursorBTH_GC_TXN_SUCC();
+				return iRet;
+			}
+		}
+	}
+	DbsCommit();
+
+	iRet = CloseCursorBTH_GC_TXN_SUCC();
+	if (iRet)
+	{
+		HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "close error iRet = [%d].", iRet);
+		return iRet;
+	}
+
+        /* add by wangt @20171116 for 退货不平或可疑以微信侧为准 begin */
+        memset(sSql, 0x00, sizeof(sSql));
+        sprintf(sSql, "select * from BTH_WX_TXN where date_settlmt='%s' and stlm_flag !='%s' and txn_num ='5151'", sDay,STLM_FLG_OK);
+        HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "select BTH_WX_TXN sql =[%s]",sSql);
+       
+        iRet =OpenCursorBTH_WX_TXN(sSql);
+        if (iRet)
+        {
+                HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "open error iRet = [%d].", iRet);
+                return iRet;
+        }
+
+        while(1)
+        {
+                memset((char *)&sBth_WX_Txn_Def, 0x00, sizeof(sBth_WX_Txn_Def));
+                iRet = FetchCursorBTH_WX_TXN (&sBth_WX_Txn_Def);/* 从微信流水表中取出记录 */
+                if (iRet == DBS_NOTFOUND)
+                {
+                        HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "Fetch BTH_WX_TXN [%d], no data!!!",iRet);
+                        break;
+                }
+                else if(iRet)
+                {
+                        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "Fetch BTH_CUP_TXN_ONLINE error [%d]",iRet);
+                        CloseCursorBTH_WX_TXN();
+                        DbsRollback();
+                        return iRet;
+                }
+
+                CommonRTrim(sBth_WX_Txn_Def.key_cup);
+                CommonRTrim(sBth_WX_Txn_Def.date_settlmt);
+                memset((char *)&sGcTxnSucc, 0x00, sizeof(sGcTxnSucc));
+                memcpy(sGcTxnSucc.key_cup, sBth_WX_Txn_Def.key_cup, sizeof(sBth_WX_Txn_Def.key_cup) - 1);
+                memcpy(sGcTxnSucc.date_settlmt_8, sBth_WX_Txn_Def.date_settlmt, sizeof(sBth_WX_Txn_Def.date_settlmt) - 1);
+                memcpy(sGcTxnSucc.txn_acq_type, "7", 1);
+                HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "key_cup=[%s], date_settlmt=[%s]", sGcTxnSucc.key_cup, sGcTxnSucc.date_settlmt);
+                iRet = DbsBTH_GC_TXN_SUCC(DBS_SELECT3, &sGcTxnSucc);
+                if(iRet != 0 && iRet != DBS_NOTFOUND)
+                {
+                        HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"select DbsBTH_GC_TXN_SUCC error iRet = [%d].", iRet);
+                        CloseCursorBTH_WX_TXN();
+                        DbsRollback ();
+                        return iRet;
+                }
+                else if(iRet == DBS_NOTFOUND)
+                {
+                        HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"未找到本地流水，直接入差错或可疑");
+                        continue;
+                } 
+
+                memset(sGcTxnSucc.trans_state, 0x00, sizeof(sGcTxnSucc.trans_state));
+                memset(sGcTxnSucc.stlm_flag, 0x00, sizeof(sGcTxnSucc.stlm_flag));
+                memcpy(sGcTxnSucc.trans_state, "1", 1);
+                memcpy(sGcTxnSucc.stlm_flag, STLM_FLG_OK, sizeof(STLM_FLG_OK));
+                iRet = DbsBTH_GC_TXN_SUCC(DBS_UPDATE1, &sGcTxnSucc);
+                if( iRet != 0)
+                {
+                        HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"update DbsBTH_GC_TXN_SUCC error iRet = [%d].", iRet);
+                        CloseCursorBTH_WX_TXN();
+                        DbsRollback ();
+                        return iRet;
+                }
+
+                memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_FLG_OK, sizeof(STLM_FLG_OK));
+                CommonGetCurrentTime(sBth_WX_Txn_Def.lst_upd_time);
+                iRet = DbsBTH_WX_TXN(DBS_UPDATE, &sBth_WX_Txn_Def);
+                if( iRet != 0)
+                {
+                        HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"update DbsBTH_WX_TXN error iRet = [%d].", iRet);
+                        CloseCursorBTH_WX_TXN();
+                        DbsRollback ();
+                        return iRet;
+                }
+
+        }
+        DbsCommit();
+        iRet = CloseCursorBTH_WX_TXN();
+        if( iRet )
+        {
+                HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"close error iRet = [%d].", iRet);
+                return iRet;
+        }
+        /* add by wangt @20171116 for 退货不平或可疑以微信侧为准 end */
+
+	/* 微信侧取未对账流水--查找到做差错处理 */
+	memset(sSql, 0x00, sizeof(sSql));
+	sprintf(sSql, "select * from BTH_WX_TXN where date_settlmt='%s' and stlm_flag='%s' and txn_num !='1021'", sDay,STLM_FLG_NOCHK);  
+	HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "select BTH_WX_TXN sql =[%s]",sSql);
+
+	iRet =OpenCursorBTH_WX_TXN(sSql);
+	if (iRet)
+	{
+		HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "open error iRet = [%d].", iRet);
+		return iRet;
+	} 
+
+	while(1)
+	{
+		memset((char *)&sBth_WX_Txn_Def, 0x00, sizeof(sBth_WX_Txn_Def));
+		iRet = FetchCursorBTH_WX_TXN (&sBth_WX_Txn_Def);/* 从微信流水表中取出记录 */
+		if (iRet == DBS_NOTFOUND)
+		{
+			HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "Fetch BTH_WX_TXN [%d], no data!!!",iRet);
+			break;
+		}
+		else if(iRet)
+		{
+			HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "Fetch BTH_CUP_TXN_ONLINE error [%d]",iRet);
+			CloseCursorBTH_WX_TXN();   
+			DbsRollback();
+			return iRet;
+		}
+
+		CommonRTrim(sBth_WX_Txn_Def.key_cup);
+		memcpy(sBth_WX_Txn_Def.stlm_flag, STLM_CUP_FLG_CUPS, sizeof(STLM_CUP_FLG_CUPS)); 
+		HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "WeiXin有POSP无 key_cup= [%s]",sBth_WX_Txn_Def.key_cup);
+
+		/* 做差错处理 */
+		memset((char *)&sGcTxnSucc, 0x00, sizeof(sGcTxnSucc));
+		memcpy(sGcTxnSucc.sys_seq_num, sBth_WX_Txn_Def.txn_seq_id + 2, 6);
+		memcpy(sGcTxnSucc.date_settlmt_8, sDay, sizeof(sDay));
+		/* add by lcy 20150331 从线上订单表查询交易信息 (主要是获取交易具体的商户用于查询商户计费代码计费) */
+                /* mod by wangt @20171113 */
+		HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "strlen(sBth_WX_Txn_Def.txn_seq_id)[%d]", strlen(sBth_WX_Txn_Def.txn_seq_id));
+                CommonRTrim(sBth_WX_Txn_Def.txn_seq_id);
+                if(strlen(sBth_WX_Txn_Def.txn_seq_id) <9 )
+                {
+		    memcpy(sGcTxnSucc.key_cup, sBth_WX_Txn_Def.txn_seq_id, 8);
+                }
+                else
+                {
+                   memcpy(sGcTxnSucc.key_cup, "J", 1);
+                   memcpy(sGcTxnSucc.key_cup+1, sBth_WX_Txn_Def.txn_seq_id, 20);
+                }
+		HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "term_ssn[%s]", sGcTxnSucc.term_ssn);
+		HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "key_cup[%s]", sGcTxnSucc.key_cup);
+
+        if(memcmp(sBth_WX_Txn_Def.txn_num,"3101",4)==0)
+		{		
+			iRet = DbsBTH_GC_TXN_SUCC(DBS_SELECT22,&sGcTxnSucc);
+		}
+		else
+		{
+			iRet = DbsBTH_GC_TXN_SUCC(DBS_SELECT23,&sGcTxnSucc);
+		}
+
+		if(iRet && iRet != DBS_NOTFOUND)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "error:[%s]",DbsError());
+			CloseCursorBTH_WX_TXN();
+			DbsRollback();
+			return -1;
+		}
+
+		memcpy(sGcTxnSucc.acq_swresved, "03", 2);
+		memcpy(sGcTxnSucc.txn_acq_type, TXN_ACQ_TYPE_ONLINE_WEIXIN_BDT, sizeof(TXN_ACQ_TYPE_ONLINE_WEIXIN_BDT));
+		iRet = bdt_in_dtl_weixin_err_gc(sBth_WX_Txn_Def, sGcTxnSucc, sDay, STLM_CUP_FLG_CUPS);
+		if(iRet)
+		{
+			HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "error:[%s]",DbsError());
+			CloseCursorBTH_WX_TXN();
+			DbsRollback();
+			return iRet;
+		}
+
+		CommonRTrim(sBth_WX_Txn_Def.key_cup);
+		CommonGetCurrentTime(sBth_WX_Txn_Def.lst_upd_time);
+		iRet = DbsBTH_WX_TXN(DBS_UPDATE, &sBth_WX_Txn_Def); 
+		if( iRet != 0)
+		{                 
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"update DbsBTH_WX_TXN error iRet = [%d].", iRet);
+			CloseCursorBTH_WX_TXN();
+			DbsRollback ();
+			return iRet;
+		}
+	}
+
+	DbsCommit();
+	iRet = CloseCursorBTH_WX_TXN();
+	if( iRet )
+	{                 
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"close error iRet = [%d].", iRet);
+		return iRet;
+	} 
+
+	HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "****************微信对账 end*****************");
+	return 0;
+}
+
+int StlmWeiXinBDT(char *sPreDay, char *sDay)
+{
+	int rc = 0;
+
+	HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, " ============ StlmWeiXinBDT BEGIN   =============.");
+
+	/* 微信和前置的前一天可疑交易对账 */
+	rc = StlmWeiXinSusps(sPreDay, sDay);
+	if (rc)
+	{
+		HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "StlmWeiXinSusps  ERROR");
+		return -1;
+	}
+
+	/* POSP与WeiXin当天交易流水核对 */
+	rc = StlmWeiXin(sPreDay, sDay);
+	if (rc)
+	{
+		HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "StlmWeiXin  ERROR");
+		return -2;
+	}
+	HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, " ============ StlmWeiXinBDT END   =============.");
+	return 0;
+}

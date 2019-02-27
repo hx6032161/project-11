@@ -1,0 +1,272 @@
+/*
+ *  Copyright 2009, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  $Id: trsFileCom.c,v 1.2 2009/02/05 07:37:14 mcpay Exp $
+ *
+ *  功能: 文件收发函数
+ *
+ *  Edit History:
+ *
+ *    2005/02/05 Modify
+ */
+
+
+#include "bfTrans.h"
+#include "dbx.h"
+#include "dlt/monData.h"
+
+
+/*
+ *  函数名称: glbFileSend
+ *  函数功能: 发送文件到指定的机构
+ *  输入参数: sObjFlatId  -- 发送目标平台号
+           sLocFile    -- 本地文件全路径
+           sRmtFile    -- 远程文件相对路径
+           sDelFileFlg -- 是否删除本地文件标志
+                       DEL_FILE_FLG_NO  --  不删除
+                       DEL_FILE_FLG_YES --  删除
+ *  输出参数: 无
+ *  返回参数: 0    -- 成功
+ *          其他 -- 失败
+ */
+int glbFileSend(tMonMsqInfoDef *ptMonMsqInfo,int nPort)
+{
+    int                     iRet;
+    IPCBfTransList          ipcBfTransList;
+
+    memset(&ipcBfTransList, 0, sizeof(IPCBfTransList));
+
+    /* 文件服务IP */
+    strcpy(ipcBfTransList.sRemoteIP, ptMonMsqInfo->sNodIP);
+
+    /* 文件服务端口 */
+    sprintf(ipcBfTransList.sRemotePort, "%d",nPort);
+
+    /* 本地报表路径 */
+    strcpy(ipcBfTransList.sLocalFileName, ptMonMsqInfo->sCfgFilePath);
+
+    strcpy(ipcBfTransList.sRemoteFileName, "file/");
+    strcat(ipcBfTransList.sRemoteFileName, ptMonMsqInfo->sNodID);
+    strcat(ipcBfTransList.sRemoteFileName, ptMonMsqInfo->sEventID);
+
+    strcpy(ipcBfTransList.sNodID, ptMonMsqInfo->sNodID);
+    strcpy(ipcBfTransList.sEventID, ptMonMsqInfo->sEventID);
+    strcpy(ipcBfTransList.sCollShell, ptMonMsqInfo->sCollShell);
+
+    /*压缩标志*/
+    memcpy(ipcBfTransList.sCompressFlag, TRANS_FILE_UNCOMPRESS, N_COMPRESS_FLAG_LEN);
+
+    /*传输标志*/
+    memcpy(ipcBfTransList.sTransFlag, TRANS_FILE_PUT, N_TRANS_FLAG_LEN);
+
+    /* 文件删除标志 */
+    memcpy(ipcBfTransList.sDelFileFlag, DEL_FILE_FLG_NO, N_DEL_FILE_FLAG_LEN);
+
+    /* 发送报表 */
+    iRet = UploadFile(&ipcBfTransList);
+
+    if (iRet != 0) {
+        OnLog(TRACE_ERROR,  "UploadFile函数执行错误 iRet = [%d]", iRet);
+        if (iRet == -1){
+            OnLog(TRACE_ERROR,  "glbFileSend本地文件不存在");
+        } else if (iRet == -2){
+            OnLog(TRACE_ERROR,  "glbFileSend对方文件传输服务未起或端口不正确iRet:[%d]", iRet);
+        } else if (iRet == -5){
+            OnLog(TRACE_ERROR,  "glbFileSend远程路经不正确或对方文件夹未建立");
+        }
+        return iRet;
+    }
+
+    /* 需要删除本地文件 */
+    if (0 == memcmp(ipcBfTransList.sDelFileFlag, DEL_FILE_FLG_YES, N_DEL_FILE_FLAG_LEN)){
+        remove(ptMonMsqInfo->sCfgFilePath);
+    }
+
+    return 0;
+}
+
+
+
+#if 0
+/*
+ * 函数名称: glbFileReceive
+ * 函数功能: 从远程取文件到本地路径
+ * 输入参数: sObjFlatId  -- 远程目标平台号
+ *          sLocFile    -- 本地文件全路径
+ *          sRmtFile    -- 远程文件相对路径
+ *          sDelFileFlg -- 是否删除远程文件标志
+ *                      DEL_FILE_FLG_NO  --  不删除
+ *                      DEL_FILE_FLG_YES --  删除
+ * 输出参数: 无
+ * 返回参数: 0    -- 成功
+ *          其他 -- 失败
+ */
+int glbFileReceive(char* sObjFlatId, char *sLocFile, char *sRmtFile, char* sDelFileFlg)
+{
+    int                     iRet;
+    IPCBfTransList          ipcBfTransList;
+    tbl_file_trans_line_info_def tTblFileTransLineInfo;
+
+    memset(&tTblFileTransLineInfo, 0, sizeof(tbl_file_trans_line_info_def));
+    memset(&ipcBfTransList,    0, sizeof(IPCBfTransList));
+
+    strcpy(tTblFileTransLineInfo.plat_id, sObjFlatId);
+    strcpy(tTblFileTransLineInfo.trans_mode, TS_TRANS_MODE_SCKT);
+    iRet = dbGetTransFileLine(&tTblFileTransLineInfo);
+    if (iRet == DB_NOTFOUND){
+        OnLog(TRACE_ERROR, "GetTransFileLine err iRet = %d", iRet);
+        return atoi(TS_ERR_NO_FILE_LINE);
+    }else if (iRet != DB_OK) {
+        OnLog(TRACE_ERROR, "GetTransFileLine err iRet = %d", iRet);
+        return atoi(TS_ERR_SYSTEM);
+    }
+
+    /* 文件服务IP */
+    strcpy(ipcBfTransList.sRemoteIP, tTblFileTransLineInfo.ip_addr);
+
+    /* 文件服务端口 */
+    strcpy(ipcBfTransList.sRemotePort, tTblFileTransLineInfo.rcv_port);
+
+    /* 本地报表路径 */
+    strcpy(ipcBfTransList.sLocalFileName, sLocFile);
+
+    /* 远程报表路径 */
+    strcpy(ipcBfTransList.sRemoteFileName, sRmtFile);
+
+    /*压缩标志*/
+    memcpy(ipcBfTransList.sCompressFlag, TRANS_FILE_UNCOMPRESS, N_COMPRESS_FLAG_LEN);
+
+    /*传输标志*/
+    memcpy(ipcBfTransList.sTransFlag, TRANS_FILE_GET, N_TRANS_FLAG_LEN);
+
+    /* 文件删除标志 */
+    memcpy(ipcBfTransList.sDelFileFlag, sDelFileFlg, N_DEL_FILE_FLAG_LEN);
+
+    /* 取报表 */
+    iRet = DownloadFile(&ipcBfTransList);
+    if (iRet != 0) {
+        OnLog(TRACE_ERROR,  "DownloadFile函数执行错误 iRet = [%d]", iRet);
+        return atoi(TS_ERR_DOWNLOAD_FILE);
+    }
+
+    return 0;
+
+}
+
+
+
+/*
+ * 函数名称: glbFTPFileReceive
+ * 函数功能: 从远程取文件到本地路径
+ * 输入参数: sObjFlatId  -- 远程目标平台号
+ *          sLocFile    -- 本地文件全路径
+ *          sRmtFile    -- 远程文件相对路径
+ * 输出参数: 无
+ * 返回参数: 0    -- 成功
+ *          其他 -- 失败
+ */
+int glbFTPFileReceive(char* sObjFlatId, char *sLocDir, char* sLocFile, 
+                      char *sRmtDir, char *sRmtFile)
+{
+    int iRet;
+    tbl_file_trans_line_info_def tTblFileTransLineInfo;    /* 文件传输线路表 */
+
+    memset(&tTblFileTransLineInfo, 0, sizeof(tbl_file_trans_line_info_def));
+
+    /* 平台号 */
+    strcpy(tTblFileTransLineInfo.plat_id, sObjFlatId);
+
+    /* 文件传输方式 --  FTP */
+    strcpy(tTblFileTransLineInfo.trans_mode, TS_TRANS_MODE_FTP);
+
+    /* 取文件传输线路表 */
+    iRet = dbGetTransFileLine(&tTblFileTransLineInfo);
+    if (iRet == DB_NOTFOUND){
+        OnLog(TRACE_ERROR, "GetTransFileLine err sObjFlatId = %s", sObjFlatId);
+        return atoi(TS_ERR_NO_FILE_LINE);
+    }else if (iRet != DB_OK) {
+        OnLog(TRACE_ERROR, "GetTransFileLine err sObjFlatId = %s", sObjFlatId);
+        return atoi(TS_ERR_SYSTEM);
+    }
+
+    /* 取文件 */
+    AllTrim(tTblFileTransLineInfo.ip_addr);
+	AllTrim(tTblFileTransLineInfo.ftp_user_id);
+	AllTrim(tTblFileTransLineInfo.ftp_user_passwd);
+    iRet = FTPDownloadFile(tTblFileTransLineInfo.ip_addr, tTblFileTransLineInfo.ftp_user_id,
+                           tTblFileTransLineInfo.ftp_user_passwd, sLocDir, sLocFile,
+                           sRmtDir, sRmtFile);
+    if (iRet != 0) {
+        OnLog(TRACE_ERROR,  "FTPDownloadFile 函数执行错误 iRet = [%d]", iRet);
+        return atoi(TS_ERR_DOWNLOAD_FILE);
+    }
+
+    return 0;
+
+}
+
+/*
+ * 函数名称: glbFTPFileSend
+ * 函数功能: 从远程取文件到本地路径
+ * 输入参数: sObjFlatId  -- 远程目标平台号
+ *          sLocFile    -- 本地文件全路径
+ *          sRmtFile    -- 远程文件相对路径
+ *          sDelFileFlg -- 是否删除远程文件标志
+ *                      DEL_FILE_FLG_NO  --  不删除
+ *                      DEL_FILE_FLG_YES --  删除
+ * 输出参数: 无
+ * 返回参数: 0    -- 成功
+ *          其他 -- 失败
+ */
+int glbFTPFileSend(char* sObjFlatId, char *sLocFile, char *sRmtFile, char* sDelFileFlg)
+{
+    int iRet;
+    tbl_file_trans_line_info_def tTblFileTransLineInfo;   /* 文件传输线路表 */
+
+    memset(&tTblFileTransLineInfo, 0, sizeof(tbl_file_trans_line_info_def));
+
+    /* 平台号 */
+    strcpy(tTblFileTransLineInfo.plat_id, sObjFlatId);
+
+    /* 文件传输方式 --  FTP */
+    strcpy(tTblFileTransLineInfo.trans_mode, TS_TRANS_MODE_FTP);
+
+    /* 取文件传输线路表 */
+    iRet = dbGetTransFileLine(&tTblFileTransLineInfo);
+    if (iRet == DB_NOTFOUND){
+        OnLog(TRACE_ERROR, "GetTransFileLine err iRet = %d", iRet);
+        return atoi(TS_ERR_NO_FILE_LINE);
+    }else if (iRet != DB_OK) {
+        OnLog(TRACE_ERROR, "GetTransFileLine err iRet = %d", iRet);
+        return atoi(TS_ERR_SYSTEM);
+    }
+
+    /* 取文件 */
+    AllTrim(tTblFileTransLineInfo.ip_addr);
+    AllTrim(tTblFileTransLineInfo.ftp_user_id);
+    AllTrim(tTblFileTransLineInfo.ftp_user_passwd);
+    iRet = FTPUploadFile(tTblFileTransLineInfo.ip_addr, tTblFileTransLineInfo.ftp_user_id,
+                         tTblFileTransLineInfo.ftp_user_passwd, NULL, sLocFile,
+                         NULL, sRmtFile);
+    if (iRet != 0) {
+        OnLog(TRACE_ERROR,  "DownloadFile函数执行错误 iRet = [%d]", iRet);
+        return atoi(TS_ERR_DOWNLOAD_FILE);
+    }
+
+    /* 需要删除本地文件 */
+    if (0 == memcmp(sDelFileFlg, DEL_FILE_FLG_YES, N_DEL_FILE_FLAG_LEN)){
+        remove(sLocFile);
+    }
+
+    return 0;
+}
+
+
+#endif

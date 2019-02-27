@@ -1,0 +1,51 @@
+#!/bin/ksh
+. $HOME/.profile
+. $HOME/online/etc/online.unix.sh   
+. $HOME/online/etc/online.db.sh
+
+#取当前日期时间
+get_currentdate()
+{
+	#设置当前年月日
+	TODAY=`date +%Y%m%d`
+	month=`date +%m`
+	day=`date +%d`
+	year=`date +%Y`	
+	#字符转换称数字
+	month=`expr $month + 0`
+	
+	day=`printf "%04s%02s%02s" $year $month $day`
+	
+
+	#按照YYYYMMDD格式打印年日期 	
+    current_date=$day
+    echo "current date is " $current_date	
+}
+get_currentdate 
+
+#取当前日期前五天时间
+get_yydate()
+{
+	#设置当前年月日
+	TODAY=`date +%Y%m%d`
+	month=`date +%m`
+	day=`date +%d`
+	year=`date +%Y`	
+	#字符转换称数字
+	month=`expr $month + 0`
+	#取前两天
+	day=`printf "%04s%02s%02s" $year $month $day`
+
+	#按照YYYYMMDD格式打印年日期 	
+	stlm_ydate=`. $HOME/online/sbin/date_calculate.sh -a 5 $day`
+	echo "前五天日期："$stlm_ydate
+	
+}
+get_yydate 
+
+
+MchtRegisterReport $stlm_ydate $current_date
+
+sleep 5
+
+TermRegisterReport $stlm_ydate $current_date	

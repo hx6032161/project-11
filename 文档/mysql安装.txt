@@ -1,0 +1,89 @@
+	参考：https://www.linuxidc.com/Linux/2016-08/134790.htm
+1 yum安装
+	1.下载YUM库
+	shell > wget http://dev.mysql.com/get/mysql57-community-release-el7-7.noarch.rpm
+	2.安装YUM库
+	shell > yum localinstall -y mysql57-community-release-el7-7.noarch.rpm
+	3.安装数据库
+	shell > yum install -y mysql-community-server
+2 查看当前mysql版本 mysql -V
+
+3 配置  vim /etc/my.cnf
+	 https://www.cnblogs.com/langdashu/p/5889352.html
+
+4 找到初始密码 cat /var/log/mysqld.log | grep root
+
+5 启动MySQL服务
+
+	shell > systemctl start mysqld.service
+	使用 service 启动：service mysqld restart //重新启动
+	service mysqld stop //关闭服务
+	
+	启动报错：Job for mysqld.service failed because the control process exited with error code. See "systemctl status mysqld.service" and "journalctl -xe" for details.
+	查看journalctl -xe发现出很多错误 吧之前my.cnf配置退回试试
+	重启之后查看mysql进程mysqld服务是否正在运行
+	[root@aiezu.com ~]# service mysqld status
+	端口是否打开
+	[root@aiezu.com ~]# lsof -i:3306
+
+6 用初始密码登录
+	 mysql -uroot -p
+	Access denied for user 'root'@'localhost' (using password: YES)出错 
+		my.cnf,添加skip-grant-tables和skip-networking：
+
+	shell > vi /etc/my.cnf
+
+	[mysqld]
+
+	skip-grant-tables
+
+	skip-networking
+
+	重启mysql，然后重复以上修改密码步骤即可，记得修改完后，去掉my.cnf添加的两行。
+	
+7.修改root密码
+	update mysql.user set authentication_string=password("aaaaaa") where user="root" and Host="localhost";
+	flush privileges;
+	quit;
+	重启mysql服务systemctl restart mysqld;
+
+8.创建新的用户
+	CREATE USER 'bbq'@'%' IDENTIFIED BY 'aaaaaa';
+	报错：ERROR 1820 (HY000): You must reset your password using ALTER USER statement before executing this statement.
+	
+	mysql> ALTER USER USER() IDENTIFIED BY 'Xiaoming250';因为密码过期，使用这个命令修改密码。
+	ALTER USER USER() IDENTIFIED BY 'Hx@6032161..'; 
+
+	set global validate_password_policy=0;将密码的限制取消，只受限于密码长度
+	set global validate_password_length=4;将密码最低长度设置为4
+
+	将密码改为aaaaaa
+	
+	CREATE USER 'bbq'@'%' IDENTIFIED BY 'aaaaaa';重新创建用户
+	
+	（先创建数据库）
+	SHOW DATABASES;显示现有数据库
+	CREATE DATABASE 数据库名;
+
+	对用户进行授权
+	GRANT ALL ON databasename.tablename TO 'username'@'host';
+
+9.使用 Navicat 远程连接数据库
+
+10.PHP远程连接MYSQL速度慢,有时远程连接到MYSQL用时4-20秒不等,本地连接MYSQL正常,出现这种问题的主要原因是,默认安装的 MYSQL开启了DNS的反向解析,在MY.INI(WINDOWS系统下)或MY.CNF(UNIX或LINUX系统下)文件的[mysqld]下加入 
+	skip-name-resolve这一句。连接mysql速度慢的解决方法. 
+
+
+方法2：这个参数的名称是 wait_timeout，其默认值为 28800秒（8小时）。其意义为关闭一个连接之前在这个连接上等到行动的秒数，也就是说，如果一个连接闲置超过这个选项所设置的秒数，MySQL会主动断开这个连接。
+
+修改操作：
+
+linux下打开/etc/my.cnf,在属性组mysqld下面添加参数如下：
+
+[mysqld]
+
+interactive_timeout=100
+
+wait_timeout=100(防止过多长连接进入sleep状态)
+
+通过show processlist命令查看当前系统的连接状态

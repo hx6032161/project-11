@@ -1,0 +1,25 @@
+pget -k T004Clear
+
+cd $ONLINE_HOME/bin
+LOG_MODE=2;export LOG_MODE
+LOG_FILE_PATH=$ONLINE_HOME/log;export LOG_FILE_PATH
+LOG_SWITCH_MODE=2;export LOG_SWITCH_MODE
+LOG_SIZE=10;export LOG_SIZE
+
+#银联流水表
+HT_N_TXN_B_DAY=2;export HT_N_TXN_B_DAY
+HT_N_TXN_HIS_B_DAY=2;export HT_N_TXN_HIS_B_DAY
+HT_N_AUTH_B_DAY=30;export HT_N_AUTH_B_DAY
+
+#外卡流水表
+HT_F_TXN_B_DAY=300;export HT_F_TXN_B_DAY
+HT_F_TXN_HIS_B_DAY=300;export HT_F_TXN_HIS_B_DAY
+HT_F_AUTH_B_DAY=30;export HT_F_AUTH_B_DAY
+
+#管理交易流水表
+HT_MNG_TXN_B_DAY=10;export HT_MNG_TXN_B_DAY
+
+#删除多少笔交易后提交
+HT_MAX_COMMIT_NUM=2000;export HT_MAX_COMMIT_NUM
+
+T004Clear > /dev/null & 

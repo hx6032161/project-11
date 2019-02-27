@@ -1,0 +1,1340 @@
+/*****************************************************************************/
+/*                TOPLINK+ -- Shanghai Huateng Software System Inc.          */
+/*****************************************************************************/
+/* PROGRAM NAME: C072Comm.c			     			     */
+/* DESCRIPTIONS: FCR                                                         */
+/*****************************************************************************/
+/*                             MODIFICATION LOG                              */
+/* DATE        PROGRAMMER     DESCRIPTION                                    */
+/* 20120710    laizhenyun     FCR通讯模块                                    */ 
+/* 20130427    laizhenyun     BIB通讯模块                                    */ 
+/*****************************************************************************/
+#include "CommIPPCli.h"
+
+char				gsSrvId[SRV_ID_LEN+1];
+char				gsToSrvId[SRV_ID_LEN+1];
+char				gsSrvSeqId[SRV_SEQ_ID_LEN+1];
+char				gsLogFile[LOG_NAME_LEN_MAX];
+T_SrvMsq                        gatSrvMsq[SRV_MSQ_NUM_MAX];
+int				giPrimaryAcctNumLen;
+int				giAcqInstIdCodeLen;
+int				giFwdInstIdCodeLen;
+int				giTrack2DataLen;
+int				giAddtnlDataPrivateLen;
+int				giTrack3DataLen;
+int				giFldReservedLen;
+int 				giChAuthInfoLen;
+int				giNationalSwResvedLen;
+int				giAcqInstResvdLen;
+int				giSwitchingDataLen;
+int				giAddtnlRespCodeLen;
+int				giRcvgInstIdCodeLen;
+
+int				nMaxRspCodeMapN, i;
+char                            gsSUserId[50];
+char                            gsConsumeAcc[50];
+char                            gsFcrInAcct[50];
+
+char 				gsIp_addr[30];
+unsigned short 			giPort;
+int 				giReSendTimes, giTimeOut;
+
+static Tbl_rsp_code_map_Def tRspCodeMap[MAX_RSP_CODE_MAP_NUM];
+
+struct CfgData dcfs_stCfgData [MAX_CFG];
+
+
+int SendReceiveXML(char *sXMLSendBuf, int iXMLSendBufLen, char *sXMLRcvBuf , int * iXMLRcvBufLen);
+int nCConnectSocket(unsigned short Port, char *Ip_addr, int nConnTryMaxNum);
+void GetFieldValueCust(struct XmlNode *pstNodeBody, char * sFieldName,int nTimes,char * sptBuf);
+int IPC2XML(char * sXmlMessage, int * nXmlMessageLen, char * MsgBuf);
+int XML2IPC(char * sXmlMessage, int nXmlMessageLen, T_IpcIntTxnDef *ptIpcIntTxn, T_IpcIntMngDef *ptIpcIntMng);
+int CreateQuerySaleXMLCode(char *sXmlMessage, int *nXmlMessageLen, char * MsgBuf);
+int CreateQuerySaleXMLCode2(char *sXmlMessage, int *nXmlMessageLen, T_IpcIntTxnDef *ptIpcIntTxn);
+
+	void ComLen(T_IpcIntTxnDef *ptIpcIntTxn);
+	int GetConfig(const char *key,char* value);
+	void HandleExit (int n);
+	int InitConfig(void);
+	char * StrPack( char *str );
+	void   vCTimeOUt();
+	void GetDate(char * sDate);
+	void GetTime(char * sTime);
+	void CreateESBsequence(T_IpcIntMngDef *ptIpcIntMng );
+
+	int SendDataToEnd( char *MsgBuf, char *IpAdd, int Port)
+	//int main( char *MsgBuf)
+	{
+		char	sMsgInBuf[MSQ_MSG_SIZE_MAX];
+		char	sMsgOutBuf[MSQ_MSG_SIZE_MAX];
+		char	sSrcSrvId[SRV_ID_LEN+1];
+		char	sXMLSendBuf[MAX_SOCK_BUF_SIZE];
+		char	sXMLRcvBuf[MAX_SOCK_BUF_SIZE];
+		char 	sTxnNum[5];
+                char    sValue[30];
+                char    Tmp1[10];
+
+		int	iXMLSendBufLen;
+		int	iXMLRcvBufLen;
+		int	nReturnCode;
+		int 	nMsgInLen;
+		int	nMsgOutLen;
+                Tbl_line_cfg_Def    tTblLineCfg;
+
+		T_IpcIntTxnDef  tIpcIntTxn;
+		T_IpcIntMngDef  tIpcIntMng;
+
+#if 0
+		if(argc < 4)
+		{
+			printf("Usage:%s srvid seq tosrvid", argv[0]);
+			exit(-1);
+		}
+
+		nReturnCode = CommInit (argc, argv);
+		if (nReturnCode)
+		{
+			printf("CommInit error[%d]\n",nReturnCode);
+			exit(-2);
+		}
+
+                /* connect to database */
+                nReturnCode = DbsConnect ();
+                if (nReturnCode) 
+                return (nReturnCode);
+#endif
+
+                memset(gsLogFile, 0, LOG_NAME_LEN_MAX);
+                sprintf (gsLogFile, "%s.%s.log", "SendMsg", "1");
+
+#if 0
+                nReturnCode = DbsConnect ();
+                if (nReturnCode)
+                {
+                    HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,
+                                        "Dbsconnect error, %d", nReturnCode); 
+                    return (nReturnCode);
+                }
+
+
+                memset(&tTblLineCfg, 0, sizeof(tTblLineCfg));
+                tTblLineCfg.usage_key = atoi(getenv("EMD_USAGE_KEY"));
+                memcpy(tTblLineCfg.srv_id, getenv("EMD_SRV_ID"), 4);
+                HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"usage_key=[%d], srv_id=[%s]",tTblLineCfg.usage_key, tTblLineCfg.srv_id);
+                nReturnCode = DbsLINECFG(DBS_SELECT, &tTblLineCfg);
+                if (nReturnCode)
+                {
+                    HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,
+                                    "DbsTBL_LINE_CFG SELECT error, %d", nReturnCode);
+                    DbsDisconnect ();
+                    return (nReturnCode);
+                }
+
+                nReturnCode = DbsDisconnect ();
+                if (nReturnCode)
+                {
+                    HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,
+                                    "DbsDisconnect error, %d", nReturnCode);
+                    return (nReturnCode);
+                } 
+#endif
+
+		memset(gsIp_addr, 0, sizeof(gsIp_addr));
+		memset(sValue, 0, sizeof(sValue));
+		memset(Tmp1, 0, sizeof(Tmp1));
+
+         	memcpy(gsIp_addr, IpAdd, 15);	
+		CommonLTrim(gsIp_addr);
+	        giPort = Port;	
+		giReSendTimes = atoi(getenv("RESEMDTIMES"));
+                giTimeOut= atoi(getenv("TIMEOUT"));
+
+		if (sigset(SIGTERM, HandleExit) == SIG_ERR)
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "sigset SIGTERM error, %d", errno);
+
+		while (1)
+		{
+			memset((char *)&sMsgInBuf,' ',MSQ_MSG_SIZE_MAX);
+			nMsgInLen = MSQ_MSG_SIZE_MAX;
+			sigrelse (SIGTERM);
+
+			/* IPC转化为XML字符串 */
+			memset(sXMLSendBuf, ' ', MAX_SOCK_BUF_SIZE);
+			memset(sXMLRcvBuf, ' ', MAX_SOCK_BUF_SIZE);
+				nReturnCode = IPC2XML(sXMLSendBuf, &iXMLSendBufLen, MsgBuf);
+				if(nReturnCode)
+				{
+					HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"IPC2XML error");    
+					continue;
+				}
+
+			/* 建立链路，发送XML报文，接收XML报文 */
+			nReturnCode = SendReceiveXML(sXMLSendBuf,iXMLSendBufLen, sXMLRcvBuf , &iXMLRcvBufLen);
+			if(nReturnCode)
+			{
+				switch(nReturnCode)
+				{
+					case -1:
+						HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"SendReceiveXML Parameter error"); 
+                                                return nReturnCode;
+                                                break;
+					case -2:
+						HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"SendReceiveXML nCConnectSocket error"); 
+                                                return nReturnCode;
+                                                break;
+					case -3:
+						HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"SendReceiveXML TcpSend error"); 
+                                                return nReturnCode;
+                                                break;
+					case -4:
+						HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"SendReceiveXML TcpReceive error"); 
+                                                //return nReturnCode;
+                                                return 0;
+                                                break;
+					default:
+						HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"SendReceiveXML  error"); 
+                                                return nReturnCode;
+                                                break;
+				}
+			}
+#if 0
+
+			/* IPC转化为XML字符串 */
+			if(sTxnNum[0] != '6')
+			{
+				nReturnCode = XML2IPC(sXMLRcvBuf, iXMLRcvBufLen, &tIpcIntTxn, NULL);
+			}
+			else
+			{
+				nReturnCode = XML2IPC(sXMLRcvBuf, iXMLRcvBufLen, NULL, &tIpcIntMng);
+			}
+
+			if(nReturnCode)
+			{
+				HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"XML2IPC error");    
+				continue;
+			}
+
+
+			memset((char *)sMsgOutBuf, ' ', MSQ_MSG_SIZE_MAX);
+			if(sTxnNum[0] == '6')
+			{
+				HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__, "管理类报文");
+				memcpy(sMsgOutBuf, &tIpcIntMng, sizeof(T_IpcIntMngDef));
+				nMsgOutLen = sizeof(T_IpcIntMngDef);
+			}
+			else
+			{
+				HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__, "交易类报文");
+				memcpy(sMsgOutBuf, &tIpcIntTxn, sizeof(T_IpcIntTxnDef));
+				nMsgOutLen = sizeof(T_IpcIntTxnDef);
+			}
+			memcpy( sMsgOutBuf, gsSrvId, SRV_ID_LEN);
+
+			HtDebugString( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__, sMsgOutBuf, nMsgOutLen);
+
+			nReturnCode = MsqSnd (gsToSrvId, gatSrvMsq, 0, nMsgOutLen, sMsgOutBuf);
+			if (nReturnCode)
+			{
+				HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"MsqSnd to %s error, %d", gsToSrvId, nReturnCode); 
+				continue;
+			}
+			HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__,"send msg to %s", gsToSrvId);
+#endif
+                        return 0;
+		}
+#if 0
+                /* disconnect db */
+                nReturnCode = DbsDisconnect ();
+                if (nReturnCode)
+                {
+                        HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,
+                                        "DbsDisconnect error, %d", nReturnCode);
+                }
+#endif
+	}
+	/*****************************************************************************/
+	/* FUNC:   int CommInit (short argc, char **argv)                            */
+	/* INPUT:  argc: 参数个数                                                    */
+	/*         argv: 参数                                                        */
+	/* OUTPUT: 无                                                                */
+	/* RETURN: 0: 成功, 其它: 失败                                               */
+	/* DESC:   连接数据库, 设置全局变量, 获取运行参数,                           */
+	/*         初始化消息队列                                                    */
+	/*****************************************************************************/
+	int CommInit (int argc, char **argv)
+	{
+		int		i,liX;
+		int		nReturnCode;
+		Tbl_srv_inf_Def	tTblSrvInf;
+		int		lUsageKey;
+		char            sValue[30];
+
+		memset(gsSrvId, 0, SRV_ID_LEN+1);
+		memset(gsSrvSeqId, 0, SRV_SEQ_ID_LEN+1);
+		memset(gsToSrvId, 0, SRV_ID_LEN+1);
+		memset(gsLogFile, 0, LOG_NAME_LEN_MAX);
+
+		/* get server id arg 1; server seq arg 2; to server id arg 3 */
+		strcpy(gsSrvId, argv[1]);
+		strcpy(gsSrvSeqId, argv[2]);
+		strcpy(gsToSrvId, argv[3]);
+
+		/* connect to database */
+		nReturnCode = DbsConnect ();
+		if (nReturnCode) return (nReturnCode);
+
+		/* get log file name from tbl_srv_inf */
+		if (getenv(SRV_USAGE_KEY))
+			lUsageKey=atoi (getenv(SRV_USAGE_KEY));
+		else
+		{
+			DbsDisconnect ();
+			return -2;
+		}
+
+		memset ((char *)&tTblSrvInf, 0x00, sizeof (Tbl_srv_inf_Def));
+		tTblSrvInf.usage_key = lUsageKey;
+		memcpy (tTblSrvInf.srv_id, gsSrvId, SRV_ID_LEN);
+		nReturnCode = DbsSRVINF(DBS_SELECT, &tTblSrvInf);
+		if (nReturnCode)
+		{
+			printf("DbsSRVINFerror[%d]",nReturnCode);
+			DbsDisconnect ();
+			return (nReturnCode);
+		}
+
+		sprintf (gsLogFile, "%s.%s.log", tTblSrvInf.srv_id, gsSrvSeqId);
+
+		/* init msg queue */
+		memset ((char *)gatSrvMsq, 0, sizeof (T_SrvMsq) * SRV_MSQ_NUM_MAX);
+		nReturnCode = MsqInit (gsSrvId, gatSrvMsq);
+		if (nReturnCode)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "MsqInit error, %d", nReturnCode);	  
+			DbsDisconnect ();
+			return (nReturnCode);
+		}
+
+		if (getenv("ESB_CAPI_CFG") == NULL)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "getenv ESB_CAPI_CFG error.");	  
+			DbsDisconnect ();
+			return -1;
+		}
+
+		/* 新USER_ID */
+		if (getenv("SUSER_ID") == NULL)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "getenv SUSER_ID error.");
+		}
+		else
+		{
+			memset( gsSUserId, 0, sizeof(gsSUserId) );
+			strcpy( gsSUserId,getenv("SUSER_ID") );
+		}
+
+		/* 收款垫资账号 */
+		if (getenv("CONSUME_OUT_ACC") == NULL)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "getenv CONSUME_OUT_ACC error.");
+		}
+		else
+		{
+			memset( gsConsumeAcc, 0, sizeof(gsConsumeAcc) );
+			strcpy( gsConsumeAcc, getenv("CONSUME_OUT_ACC") );
+		}
+
+		/* 对私转对公FCR转入内部帐号 */
+		if (getenv("FCR_IN_ACCT") == NULL)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "getenv FCR_IN_ACCT error.");
+		}
+		else
+		{
+			memset( gsFcrInAcct, 0, sizeof(gsFcrInAcct) );
+			strcpy( gsFcrInAcct, getenv("FCR_IN_ACCT") );
+		}
+
+		memset(&tRspCodeMap, 0, sizeof(Tbl_rsp_code_map_Def) * MAX_RSP_CODE_MAP_NUM);
+		nMaxRspCodeMapN = MAX_RSP_CODE_MAP_NUM;
+		nReturnCode = LoadRspCodeMap(gsSrvId, &nMaxRspCodeMapN, &tRspCodeMap);
+		if(nReturnCode)
+		{
+			HtLog(	gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "LoadRspCodeMap %d.", nReturnCode);
+			DbsDisconnect ();
+			return nReturnCode;
+		}
+		HtLog(	gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, 
+				"LoadRspCodeMap %d", nMaxRspCodeMapN);
+
+		/* disconnect db */
+		nReturnCode = DbsDisconnect ();
+		if (nReturnCode)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+					"DbsDisconnect error, %d", nReturnCode);	  
+		}
+
+		/* modify by sunlin at 20130603 for 取一次配置参数 */
+		memset(gsIp_addr, 0, sizeof(gsIp_addr));
+		memset(sValue, 0, sizeof(sValue));
+		/* Get Parameter */
+		nReturnCode = InitConfig();
+		if(nReturnCode)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "InitConfig error");
+			return -1;
+		}
+
+		nReturnCode = GetConfig("IP", sValue);
+		if(nReturnCode)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetConfig IP error");
+			return -1;
+		}
+		strcpy(gsIp_addr, sValue);	
+		
+		nReturnCode = GetConfig("PORT", sValue);
+		if(nReturnCode)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetConfig PORT error");
+			return -1;
+		}
+		giPort = atoi(sValue);
+
+		nReturnCode = GetConfig("RESENDTIMES", sValue);
+		if(nReturnCode)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetConfig RESENDTIMES error");
+			return -1;
+		}
+		giReSendTimes = atoi(sValue);
+
+		nReturnCode = GetConfig("TIMEOUT", sValue);
+		if(nReturnCode)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "GetConfig TIMEOUT error");
+			return -1;
+		}
+		giTimeOut= atoi(sValue);
+		/* end */
+
+		return (0);
+	}
+
+	void HandleExit (int n)
+	{
+		HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "exits");
+		exit( 1 );
+	}
+
+	/*****************************************************************************/
+	/* FUNC:   void IPC2XML()						     */
+	/* INPUT:  无  								     */
+	/* OUTPUT: 无                                                                */
+	/* DESC:   创建XML报文树状结构						     */
+	/*****************************************************************************/
+	int IPC2XML(char * sXmlMessage, int * nXmlMessageLen,  char *MsgBuf )
+	{
+		if(MsgBuf[0] != '\0' && MsgBuf[0] != ' ')
+		{
+			CreateQuerySaleXMLCode(sXmlMessage, nXmlMessageLen, MsgBuf);
+		}
+
+		return 0;
+	}
+
+	/*****************************************************************************/
+	/* FUNC:   int XML2IPC()						     */
+	/* INPUT:  无								     */ 
+	/* OUTPUT: 无	                                                             */
+	/* DESC:   解析XML报文						 	     */ 
+	/*****************************************************************************/
+	int XML2IPC(char * sXmlMessage, int nXmlMessageLen, T_IpcIntTxnDef *ptIpcIntTxn, T_IpcIntMngDef *ptIpcIntMng )
+	{
+		char    sRetCodeXML[50];
+		char    sRetMsgXML[512+1];
+		char    sTmp[128+1];
+		char    *sMsg[100];
+		char    *Tmp = NULL;
+		char    *Tmp1 = NULL;
+		char    sTmp1[10000];
+		char    ReturnCode[6+1];
+		char    ConponAmt[12+1];
+		char    sAmtTrans[12+1];
+		char    sTmpData[12+1];
+		char    sTmpData1[12+1];
+		char    sTmpData2[12+1];
+		T_IpcIntTxnDef  tSendIpcIntTxn;
+
+		int                     nReturnCode , i, n;
+		struct XmlNode          *RootNode = NULL;
+		struct XmlNode          *pstNodeSys = NULL;
+		struct XmlNode          *pstNodeApp = NULL;
+		struct XmlNode          *pstNodeBody = NULL;
+
+
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__, "解析XML报文开始");
+
+	#if 0
+		RootNode = (struct XmlNode *)malloc(sizeof(struct XmlNode));
+		if(!RootNode)
+		{
+			HtLog(gsLogFile,HT_LOG_MODE_ERROR,__FILE__,__LINE__,"malloc node error.");
+			return -2;
+		}
+		InitXmlNode2(RootNode);
+
+		/* XML解析到内存树 */
+		nReturnCode = CreateTreeFromXML( RootNode,sXmlMessage,nXmlMessageLen );
+		if(nReturnCode)
+		{
+			HtLog(gsLogFile,HT_LOG_MODE_ERROR,__FILE__,__LINE__,"CreateTreefromXML error %d",nReturnCode);
+			FreeXmlNode(RootNode);
+			return -3;
+		}
+
+		/* 打印内存树节点 */
+		if(atoi(getenv(LOG_MODE)) == HT_LOG_MODE_DEBUG)
+			DebugXmlNode(RootNode,0);
+
+		/* 得到内存树sys-header指针 */
+		pstNodeSys  = GetNodebyType(RootNode, "sys-header", "", "", 1);
+
+		/* wxw add 得到内存树app-header指针 */
+		pstNodeApp = GetNodebyType(RootNode, "app-header", "", "", 1);
+
+		/* Field RET_CODE */
+		memset(sRetCodeXML, 0, sizeof(sRetCodeXML));
+		GetFieldValue(pstNodeSys,"RET_CODE", 1, sRetCodeXML);
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"RET_CODE[%2.2s]", sRetCodeXML);
+
+		/*业务成功、失败，通过读取body读取39域值*/
+		/* 得到内存树body指针 */
+		pstNodeBody = GetNodebyType(RootNode, "body", "", "", 1);
+
+		/* 金融类交易 */
+		if(ptIpcIntTxn != NULL)
+		{
+			memset(ptIpcIntTxn->sRespCode, ' ', F039_LEN);
+			GetFieldValue(pstNodeSys,"RET_CODE", 1, ptIpcIntTxn->sRespCode);
+
+			/* Field RET_MSG */
+			memset(sRetMsgXML, 0, sizeof(sRetMsgXML));
+			GetFieldValue(pstNodeSys,"RET_MSG", 1, sRetMsgXML);
+			CommonRTrim(sRetMsgXML);
+			memcpy(ptIpcIntTxn->sTransDescrpt, sRetMsgXML, strlen(sRetMsgXML));
+			ptIpcIntTxn->cF104Ind = 'Y';
+			HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"RET_MSG=[%100.100s]", ptIpcIntTxn->sTransDescrpt);
+			memset(sTmp, 0, sizeof(sTmp));
+			GetFieldValueCust(pstNodeSys, "ReturnStatus", 1, sTmp);
+			HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"ReturnStatus=[%1.1s]", sTmp);
+
+			ptIpcIntTxn->sTxnNum[3]++;
+
+			if(memcmp(ptIpcIntTxn->sRespCode, "00", 2) == 0)
+			{
+				if(memcmp(ptIpcIntTxn->sTxnNum, "143", 3) == 0)
+				//if(memcmp(ptIpcIntTxn->sTxnNum, "142", 3) == 0)
+				{
+					   memset(ptIpcIntTxn->sAmtTrans, ' ', sizeof(ptIpcIntTxn->sAmtTrans));
+					   GetFieldValueCust(pstNodeBody, "ConponAmt", 1, ptIpcIntTxn->sAmtTrans);
+				}
+
+			}
+			else
+			{
+				for(i=0;i<nMaxRspCodeMapN;i++)
+				{
+					if ((memcmp(tRspCodeMap[i].src_id, gsSrvId, SRV_ID_LEN) == 0 && memcmp(ptIpcIntTxn->sRespCode,
+									tRspCodeMap[i].src_rsp_code, tRspCodeMap[i].src_rsp_code_l) == 0))
+						break;
+				}
+				if(i != nMaxRspCodeMapN)
+				{
+					memcpy(ptIpcIntTxn->sRespCode,tRspCodeMap[i].dest_rsp_code,F039_LEN);
+				}
+			}
+
+		}
+		
+		FreeXmlNode(RootNode);
+	#endif 
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"sXmlMessage=[%s]", sXmlMessage);
+
+		/* 取应答码 */
+		memset(sTmp1, 0, sizeof(sTmp1));
+		strcpy(sTmp1, sXmlMessage);
+		Tmp = strstr(sTmp1, "<ReturnCode>");
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"Tmp=[%s]", Tmp);
+		memcpy(ReturnCode, Tmp+12, 6);
+		if(memcmp(ReturnCode, "000000", 6)==0)
+		{
+			memcpy(ptIpcIntTxn->sRespCode, F039_SUCCESS, F039_LEN);
+		}
+		else
+		{
+			memcpy(ptIpcIntTxn->sRespCode, F039_MAL_FUNCTION, F039_LEN);
+		}
+
+		if(memcmp(ptIpcIntTxn->sRespCode, "00", 2) == 0)
+		{
+			/* 取交易金额 */
+			memset(ConponAmt, 0, sizeof(ConponAmt));
+			memset(sAmtTrans, 0, sizeof(sAmtTrans));
+			memset(sTmpData, 0, sizeof(sTmpData));
+			memset(sTmpData1, 0, sizeof(sTmpData1));
+			memset(sTmpData2, 0, sizeof(sTmpData2));
+			Tmp1 = strstr(sTmp1,"<ConponAmt>");
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"Tmp1=[%s]", Tmp1);
+			memcpy(ConponAmt, Tmp1 + 11, 12);
+			memcpy(sAmtTrans, ptIpcIntTxn->sAmtTrans, F004_LEN);
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"ConponAmt=[%s]", ConponAmt);
+			memcpy(&ptIpcIntTxn->cF062Ind,"Y",1);
+			sprintf(sTmpData,"%012.f", (atof(ConponAmt)*100)/atof(sAmtTrans));
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"sTmpData=[%f]", atof(ConponAmt)*100);
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"sTmpData=[%s]", sTmpData);
+			sprintf(sTmpData1,"%012.f",atof(ConponAmt));
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"sTmpData1=[%s]", sTmpData1);
+			sprintf(sTmpData2,"%012.f",atof(sAmtTrans)-atof(ConponAmt));
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"sTmpData2=[%s]", sTmpData2);
+			memset(ptIpcIntTxn->sSwitchingData, ' ', POS_F062_VAL_LEN);
+			memcpy(ptIpcIntTxn->sSwitchingData,sTmpData,12);
+			memcpy(ptIpcIntTxn->sSwitchingData+12,sTmpData2,12);
+			memcpy(ptIpcIntTxn->sSwitchingData+24,sTmpData1,12);
+			memcpy(ptIpcIntTxn->sSwitchingData+36,"A",1);
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"F062=[%50.50s]", ptIpcIntTxn->sSwitchingData);
+			memcpy(ptIpcIntTxn->sSwitchingDataLen, "100", 3);
+			
+			memset(ptIpcIntTxn->sAmtTrans, ' ', sizeof(ptIpcIntTxn->sAmtTrans));
+			GetFieldValueCust(pstNodeBody, "ConponAmt", 1, ptIpcIntTxn->sAmtTrans);
+	 
+			memcpy(ptIpcIntTxn->sMsgDestId, ptIpcIntTxn->sMsgSrcId, SRV_ID_LEN);
+			ptIpcIntTxn->sTxnNum[3]++;
+		}
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"sTxnNum=[%4.4s]", ptIpcIntTxn->sTxnNum);
+
+		HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__, "解析XML报文结束");
+		return 0;
+	}
+
+	int CreateQuerySaleXMLCode2(char *sXmlMessage, int *nXmlMessageLen, T_IpcIntTxnDef *ptIpcIntTxn)
+{
+	struct XmlNode *RootNode = NULL;
+	struct XmlNode *ChildNode = NULL;
+	struct XmlNode *BrothNode = NULL;
+	struct XmlNode *StrucNode = NULL;
+	char sTemp[300];
+	char sDate[9];
+	char sTime[10];
+	int nReturnCode; 
+
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "构造XML报文树开始");       
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "sTxnNum=[%4.4s]", ptIpcIntTxn->sTxnNum);
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "sTransmsnDateTime=[%10.10s]", ptIpcIntTxn->sTransmsnDateTime);
+        //memcpy(ptIpcIntTxn->sSysTraceAuditNum, ptIpcIntTxn->sTermSSN, F011_LEN);
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "sSysSeqNum=[%6.6s]", ptIpcIntTxn->sSysSeqNum);
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "sTermSSN=[%6.6s]", ptIpcIntTxn->sTermSSN);
+
+	RootNode = (struct XmlNode *)malloc(sizeof(struct XmlNode));
+	if(!RootNode)
+	{
+		HtLog(gsLogFile,HT_LOG_MODE_ERROR,__FILE__,__LINE__,"malloc node error.");
+		return -1;
+	}
+
+	InitXmlNode2(RootNode);
+	SetNodeName(RootNode,"service");
+#if 0
+	/* 求可变域的长度 */
+	if(ptIpcIntTxn!= NULL)
+	{
+		CreateESBsequence(ptIpcIntTxn);
+	}
+#endif
+
+	memset(sDate,0x00,sizeof(sDate));
+	memset(sTime,0x00,sizeof(sTime));
+
+	GetDate(sDate);
+	GetTime(sTime);
+
+	/* 构造内存树*/
+
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "商户签约时组合查询帐户信息接口");       
+
+	/*	 SYS_HEAD	*/
+	ChildNode = PutChildXmlNode(RootNode,"sys-header","","");
+	ChildNode = PutChildXmlNode(ChildNode,"data","SYS_HEAD","");
+	StrucNode = PutChildXmlNode(ChildNode,"struct","","");
+
+	/* 服务代码 */ 
+	ChildNode = PutChildXmlNode(StrucNode,"data","ServiceCode","");
+	PutFieldIn(ChildNode,"ServiceCode", "string", 30, 0, "12002000044", 11);
+
+	/* 服务应用场景   */
+	ChildNode = PutChildXmlNode(StrucNode,"data","ServiceScene","");
+	PutFieldIn(ChildNode,"ServiceScene", "string", 2, 0, "01", 2);
+
+	/*  请求系统编号  */
+	ChildNode = PutChildXmlNode(StrucNode,"data","ConsumerId","");
+	PutFieldIn(ChildNode,"ConsumerId", "string", 10, 0, "1000366565", 10);
+
+	/*发送本地方系统流水号*/
+	ChildNode = PutChildXmlNode(StrucNode,"data","ConsumerSeqNo","");
+	PutFieldIn(ChildNode,"ConsumerSeqNo", "string", 52, 0, ptIpcIntTxn->sSysSeqNum, 6);
+
+	/*发送交易日期 */
+	ChildNode = PutChildXmlNode(StrucNode,"data","TranDate","");
+	PutFieldIn(ChildNode,"TranDate", "string", 8, 0, sDate, 8);
+
+	/* 发送交易时间 */
+	ChildNode = PutChildXmlNode(StrucNode,"data","TranTime","");
+	PutFieldIn(ChildNode,"TranTime", "string", 9, 0, sTime, 9);
+
+	/*	APP_HEAD	*/
+	ChildNode = PutChildXmlNode(RootNode,"app-header","","");
+	ChildNode = PutChildXmlNode(ChildNode,"data","APP_HEAD","");
+	StrucNode = PutChildXmlNode(ChildNode,"struct","","");
+
+	/*	LOCAL_HEAD	*/
+	ChildNode = PutChildXmlNode(RootNode,"local-header","","");
+	ChildNode = PutChildXmlNode(ChildNode,"data","LOCAL_HEAD","");
+	StrucNode = PutChildXmlNode(ChildNode,"struct","","");
+
+	/*	BODY		*/
+	ChildNode = PutChildXmlNode(RootNode,"body","","");
+	ChildNode = PutChildXmlNode(ChildNode,"data","BODY","");
+	StrucNode = PutChildXmlNode(ChildNode,"struct","","");
+
+	ChildNode = PutChildXmlNode(StrucNode,"data","TranCode","");
+	PutFieldIn(ChildNode,"TranCode", "string", 10, 0, "J111", 4);
+
+	/* 帐号 */
+	memset(sTemp,0x00,sizeof(sTemp));
+	memcpy(sTemp, ptIpcIntTxn->sPrimaryAcctNum, 19);
+	CommonRTrim(sTemp);
+	ChildNode = PutChildXmlNode(StrucNode,"data","AcctNo","");
+	PutFieldIn(ChildNode,"AcctNo", "string", 50, 0, sTemp, strlen(sTemp));
+
+	ChildNode = PutChildXmlNode(StrucNode,"data","IntgrtnTp","");
+	PutFieldIn(ChildNode,"IntgrtnTp", "string", 4, 0, "9999", 4);
+
+	/*发送交易日期 */
+	ChildNode = PutChildXmlNode(StrucNode,"data","TranDate","");
+	PutFieldIn(ChildNode,"TranDate", "string", 8, 0, sDate, 8);
+
+	/* 发送交易时间 */
+	ChildNode = PutChildXmlNode(StrucNode,"data","TranTime","");
+	PutFieldIn(ChildNode,"TranTime", "string", 9, 0, sTime, 9);
+
+	ChildNode = PutChildXmlNode(StrucNode,"data","Flg","");
+	PutFieldIn(ChildNode,"Flg", "string", 10, 0, "0", 1);
+
+	ChildNode = PutChildXmlNode(StrucNode,"data","McthNo","");
+	PutFieldIn(ChildNode,"McthNo", "string", 10, 0, "3", 1);
+
+	ChildNode = PutChildXmlNode(StrucNode,"data","TxnAmt","");
+	PutFieldIn(ChildNode,"TxnAmt", "string", 10, 0, "J111", 4);
+
+	memset(sTemp,0x00,sizeof(sTemp));
+	memcpy(sTemp, ptIpcIntTxn->sAmtTrans, 12);
+	CommonRTrim(sTemp);
+	ChildNode = PutChildXmlNode(StrucNode,"data","TxnAmt","");
+	PutFieldIn(ChildNode,"TxnAmt", "string", 12, 0, sTemp, strlen(sTemp));
+
+	ChildNode = PutChildXmlNode(StrucNode,"data","CnlCd","");
+	PutFieldIn(ChildNode,"CnlCd", "string", 10, 0, "0020", 4);
+
+	ChildNode = PutChildXmlNode(StrucNode,"data","TxnTp","");
+	PutFieldIn(ChildNode,"TxnTp", "string", 10, 0, "A45", 3);
+
+
+	/* 打印内存树节点 */	
+	if(atoi(getenv(LOG_MODE)) == HT_LOG_MODE_DEBUG)
+		DebugXmlNode(RootNode,0);
+
+	/* 内存树转化为XML */
+	*nXmlMessageLen = 0;
+	nReturnCode = CreateXMLFromTree( RootNode,sXmlMessage,nXmlMessageLen );
+	if(nReturnCode)
+	{
+		HtLog(gsLogFile,HT_LOG_MODE_ERROR,__FILE__,__LINE__,"CreateXMLFromTree error %d",nReturnCode);
+		FreeXmlNode(RootNode);
+
+		return -2;
+	}
+	sXmlMessage[*nXmlMessageLen]=0x00;
+
+	FreeXmlNode(RootNode);
+
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"构造XML报文树结束");       
+
+	return 0;
+}
+
+int CreateQuerySaleXMLCode(char *sXmlMessage, int *nXmlMessageLen, char *MsgBuf)
+{
+	struct XmlNode *RootNode = NULL;
+	struct XmlNode *ChildNode = NULL;
+	struct XmlNode *BrothNode = NULL;
+	struct XmlNode *StrucNode = NULL;
+	char sTemp[10000];
+	char sBuf[6][2000]={0,0};
+	char sAry[4][2000]={0,0};
+	char sDate[9];
+	char sTime[10];
+	char Protocol[4+1];
+	char TempCode[41];
+	char Phone[15];
+	char Msg[500];
+	int nReturnCode; 
+
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "构造XML报文树开始");       
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "MsgBuf=[%s]", MsgBuf);
+
+	memset(sDate,0x00,sizeof(sDate));
+	memset(sTime,0x00,sizeof(sTime));
+	memset(Protocol,0x00,sizeof(Protocol));
+	memset(TempCode,0x00,sizeof(TempCode));
+	memset(Phone,0x00,sizeof(Phone));
+	memset(Msg,0x00,sizeof(Msg));
+
+	GetDate(sDate);
+	GetTime(sTime);
+        memcpy(Protocol, MsgBuf, 4);
+        memcpy(TempCode, MsgBuf + 4, 4);
+        memcpy(Phone, MsgBuf + 8, 11);
+        memcpy(Msg, MsgBuf + 19, strlen(MsgBuf) - 19);
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "Phone=[%s]", Phone);
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "Msg=[%s]", Msg);
+
+	strcpy(sAry[0],"<?xml version=\"1.0\" encoding=\"GB2312\"?><EMD><HEAD>");
+        sprintf(sBuf[0],"<TRANSID>POS%8s%.6s</TRANSID>", sDate, sTime);
+        sprintf(sBuf[1],"<TIMESTAMP>%8s%.6s</TIMESTAMP>", sDate, sTime);
+        sprintf(sBuf[2],"<ADDRESS>%s</ADDRESS>", Phone);
+        sprintf(sBuf[3],"<MSG>%s</MSG>", Msg);
+        sprintf(sBuf[4],"<PROTOCOL>%s</PROTOCOL>", Protocol);
+        sprintf(sBuf[5],"<TEMPCODE>%s</TEMPCODE>", TempCode);
+	strcpy(sAry[1],"</HEAD><BODY>");
+	strcpy(sAry[2], "</BODY></EMD>");
+	strcpy(sAry[3], "<SRCBRANCH>000000</SRCBRANCH><TRANSCOMMAND></TRANSCOMMAND><SRCSYSTEM></SRCSYSTEM><SRCDEVICE></SRCDEVICE>");
+
+	strcpy(sXmlMessage, sAry[0]);
+	strcat(sXmlMessage, sBuf[4]);
+	strcat(sXmlMessage, sBuf[5]);
+	strcat(sXmlMessage, sAry[3]);
+	strcat(sXmlMessage, sBuf[0]);
+	strcat(sXmlMessage, sBuf[1]);
+	strcat(sXmlMessage, sAry[1]);
+	strcat(sXmlMessage, sBuf[2]);
+	strcat(sXmlMessage, sBuf[3]);
+	strcat(sXmlMessage, sAry[2]);
+
+	*nXmlMessageLen = strlen(sXmlMessage);
+	sXmlMessage[*nXmlMessageLen]=0x00;
+
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"构造XML报文树结束");       
+
+	return 0;
+}
+
+
+/*****************************************************************************/
+/* FUNC:   void Comlen()						     */
+/* INPUT:  无								     */ 
+/* OUTPUT: 无	                                                             */
+/* DESC:   求可变域长度						 	     */ 
+/*****************************************************************************/
+void ComLen(T_IpcIntTxnDef *ptIpcIntTxn)
+{
+	char	sBuf[20];
+	if(ptIpcIntTxn->cF002Ind == 'Y')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sPrimaryAcctNumLen, F002_LEN_LEN);
+		giPrimaryAcctNumLen = atoi(sBuf);
+	}
+	if(ptIpcIntTxn->sAcqInstIdCodeLen[0] != ' ' && ptIpcIntTxn->sAcqInstIdCodeLen[0] != '\0')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sAcqInstIdCodeLen, F032_LEN_LEN);
+		giAcqInstIdCodeLen = atoi(sBuf);
+	}
+	if(ptIpcIntTxn->sFwdInstIdCodeLen[0] != ' ' && ptIpcIntTxn->sFwdInstIdCodeLen[0] != '\0')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sFwdInstIdCodeLen, F033_LEN_LEN);
+		giFwdInstIdCodeLen= atoi(sBuf);
+	}
+	if(ptIpcIntTxn->cF035Ind == 'Y')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sTrack2DataLen, F035_LEN_LEN);
+		giTrack2DataLen = atoi(sBuf);
+	}
+	if(ptIpcIntTxn->sRcvgInstIdCodeLen[0] != ' ' && ptIpcIntTxn->sRcvgInstIdCodeLen[0] != '\0')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sRcvgInstIdCodeLen, F100_LEN_LEN);
+		giRcvgInstIdCodeLen = atoi(sBuf);
+	}
+	if(ptIpcIntTxn->cF036Ind == 'Y')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sTrack3DataLen, F036_LEN_LEN);
+		giTrack3DataLen = atoi(sBuf);
+	}
+	if(ptIpcIntTxn->cF048Ind == 'Y')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sAddtnlDataPrivateLen, F048_LEN_LEN);
+		giAddtnlDataPrivateLen = atoi(sBuf);
+	}
+	if(ptIpcIntTxn->sFldReservedLen[0] != ' ' && ptIpcIntTxn->sFldReservedLen[0] != '\0')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sFldReservedLen, F060_LEN_LEN);
+		giFldReservedLen = atoi(sBuf);
+	}
+	if(ptIpcIntTxn->sChAuthInfoLen[0] != ' ' && ptIpcIntTxn->sChAuthInfoLen[0] != '\0')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sChAuthInfoLen, F061_LEN_LEN);
+		giChAuthInfoLen = atoi(sBuf);
+	}
+	if(ptIpcIntTxn->cF121Ind == 'Y')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sNationalSwResvedLen, F121_LEN_LEN);
+		giNationalSwResvedLen = atoi(sBuf);
+	}
+	if(ptIpcIntTxn->cF122Ind == 'Y')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sAcqInstResvdLen, F122_LEN_LEN);
+		giAcqInstResvdLen = atoi(sBuf);
+	}
+	if(ptIpcIntTxn->cF062Ind == 'Y')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sSwitchingDataLen, F062_LEN_LEN);
+		giSwitchingDataLen= atoi(sBuf);
+	}
+	if(ptIpcIntTxn->cF044Ind == 'Y')
+	{
+		memset(sBuf, 0, 20);
+		memcpy(sBuf, ptIpcIntTxn->sAddtnlRespCodeLen, F044_LEN_LEN);
+		giAddtnlRespCodeLen = atoi(sBuf);
+	}
+}
+
+/*
+   void cvtKey(T_IpcIntMngDef *ptIpcIntMng)
+   {
+   char	sBuf[36];
+   memset(gsKey, 0, sizeof(gsKey));
+   memset(sBuf, 0, sizeof(sBuf));
+   memcpy(sBuf, "4E4B", 4);
+   memcpy(sBuf+4, ptIpcIntMng->sMisc, 32);
+   memcpy(gsKey, sBuf, 36);
+   }
+   */
+
+int SendReceiveXML(char *sXMLSendBuf, int nXMLSendBufLen, char *sXMLRcvBuf , int * nXMLRcvBufLen)
+{
+	int     nReturnCode;
+	int 	socket_id;
+	char	sMsgSendBuf[MAX_SOCK_BUF_SIZE];
+	char	sMsgRcvBuf[MAX_SOCK_BUF_SIZE];
+	char	lsaMsgLen[8+1];
+	int	lnMsgSendLen;
+	int	lnMsgInLen;
+	int	lnDataL;
+        int     flag;
+        char    sTmp1[1000]={0};
+        char    ReturnCode[3+1]={0}; 
+        char    *sTmp = NULL;
+
+        flag = 1;
+        while(flag != 0 && flag <= 3)
+        {
+	/* Connect ESB Server */
+	socket_id = nCConnectSocket(giPort, gsIp_addr, giReSendTimes);
+	if(socket_id < 0)
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "nCConnectSocket error");
+		return -2;
+	}
+
+	/* Send Message To Socket */
+	HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__,"sXMLSendBuf=\n%s", sXMLSendBuf);
+
+#if 0
+	memset(&sMsgSendBuf[0],' ',MAX_SOCK_BUF_SIZE);
+	sprintf(&sMsgSendBuf[0],"%08d",nXMLSendBufLen);
+	memcpy(&sMsgSendBuf[8],sXMLSendBuf,nXMLSendBufLen);
+	lnMsgSendLen = nXMLSendBufLen + 8;
+#endif
+	memcpy(&sMsgSendBuf[0],sXMLSendBuf,nXMLSendBufLen);
+	lnMsgSendLen = nXMLSendBufLen;
+
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "vcTcpSend"); 
+	if(nReturnCode = nCSocketSnd( 
+				socket_id, 
+				&sMsgSendBuf[0], 
+				&lnMsgSendLen))
+	{	
+		close(socket_id);
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "socket snd error, %d", errno);
+		return  -3;
+	}
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, 
+			"socket[%d] snd ok len[%d]", socket_id,lnMsgSendLen);
+
+	sigset(SIGALRM, vCTimeOUt);
+
+#if 0
+	/* 读取8字节报文头 */
+	lnDataL = 8;
+	memset(&lsaMsgLen[0], 0, (8+1));
+	alarm(giTimeOut);
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "vcTcpRcv"); 
+	if(nReturnCode = nCSocketRcv(
+				socket_id,
+				&lsaMsgLen[0],
+				&lnDataL,
+				0)) 
+	{
+		close(socket_id);
+		alarm(0);
+		if (nReturnCode != ERR_CODE_MSQ_BASE + EINTR)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+					"socket rcv error, %d", errno);
+			return -4;
+		}
+		else
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+					"timeout socket rcv error, %d", errno);
+			return -4;
+		}
+	}
+	alarm(0);
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, 
+			"socket rcv ok [%d] len:[%d] buf:[%s]", nReturnCode, lnDataL, lsaMsgLen);
+#endif
+
+	/* 读取XML内容 */
+	//lnMsgInLen = atoi(lsaMsgLen);
+	lnMsgInLen = atoi(getenv("MSGLEN"));
+	memset(sMsgRcvBuf,0,MAX_SOCK_BUF_SIZE);
+	alarm(giTimeOut);
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, 
+			"socket[%d] snd  len[%d]", socket_id,lnMsgInLen);
+	nReturnCode = nCSocketRcv1(
+				socket_id,
+				&sMsgRcvBuf[0],
+				&lnMsgInLen,
+				0); 
+	HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"nReturnCode=[%d]",nReturnCode); 
+        if(nReturnCode)
+	{
+		close(socket_id);
+		alarm(0);
+		if (nReturnCode != ERR_CODE_MSQ_BASE + EINTR)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+					"socket rcv error, %d:%s", errno, strerror(errno));
+			return -4 ;
+		}
+		else
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+					"timeout socket rcv error, %d", errno);
+			return -4;
+		}
+	}
+	alarm(0);
+
+	close(socket_id);
+
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, 
+			"socket rcv ok [%d] len:[%d]", nReturnCode, lnMsgInLen);
+
+	/* 返回值 */
+	memcpy(sXMLRcvBuf,sMsgRcvBuf,lnMsgInLen);
+	*nXMLRcvBufLen = lnMsgInLen;
+
+	HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__,"sXMLRcvBuf=%s", sXMLRcvBuf);
+        /* add by wangt @20171010  */
+        /* 取应答码 */
+        memset(sTmp1, 0, sizeof(sTmp1));
+        memcpy(sTmp1, sXMLRcvBuf, lnMsgInLen);
+        sTmp = strstr(sTmp1, "<RESULTCODE>");
+        HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"sTmp=[%s]", sTmp);
+        memcpy(ReturnCode, sTmp+12, 3);
+        if(memcmp(ReturnCode, "000", 3)==0)
+        {
+            HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"短信发送成功");
+            flag = 0;
+        }
+        else
+        {
+            HtLog(gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"短信第%d次发送失败", flag);
+            flag ++;
+        } 
+        }
+	return 0;
+}
+
+int InitConfig(void)
+{
+
+	int LineChar = VALUE_LGH + KEY_LGH - 1;
+	int i;
+	FILE *fp;
+	char Line[VALUE_LGH + KEY_LGH - 1], value[VALUE_LGH], key[KEY_LGH];
+	char *StrP;
+	char CFG_FILE[200];
+
+	memset(CFG_FILE, 0x00, sizeof(CFG_FILE));
+	memset(&dcfs_stCfgData,0x00,sizeof(dcfs_stCfgData));
+	memset(Line,0x00,sizeof(Line));
+	memset(value,0x00,sizeof(value));
+	memset(key,0x00,sizeof(key));
+	i = 0;
+
+	sprintf(CFG_FILE, "%s", getenv("ESB_CAPI_CFG"));
+	if((fp = fopen(CFG_FILE,"r")) == NULL)
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "Cannot open config file %s",CFG_FILE);
+		return -1;
+	}
+
+	while (fgets(Line,LineChar,fp)!=NULL)
+	{
+
+
+		if((StrP=strchr(Line,'#'))!=NULL)
+		{
+			*StrP=0x00;
+		}
+
+		StrPack(Line);
+
+		if (*Line=='#' || strlen(Line) == 0) continue;
+
+		if((StrP=strchr(Line,'=')) == NULL) continue;
+
+		strcpy(value,StrP + 1);
+		strncpy(key,Line,StrP-Line);
+
+
+		strcpy(dcfs_stCfgData[i].key, StrPack(key));
+		strcpy(dcfs_stCfgData[i].value, StrPack(value));
+
+
+		memset(Line,0x00,sizeof(Line));
+		memset(value,0x00,sizeof(value));
+		memset(key,0x00,sizeof(key));
+
+
+		i++;
+		if (i>MAX_CFG) 
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "Error load config file,The Line Number extend %d",MAX_CFG);
+			fclose(fp);
+			return -2;
+		}
+	}
+	fclose(fp);
+
+	return 0;
+}
+
+int GetConfig(const char *key,char* value)
+{
+
+	int i;
+
+	memset(value, 0, 30);
+
+	for (i=0;i<MAX_CFG;i++)
+	{
+		if (!strcmp(dcfs_stCfgData[i].key, key))
+		{
+			strcpy(value, dcfs_stCfgData[i].value);
+			return 0;
+		}
+	}
+	if (i==MAX_CFG)
+	{ 
+		strcpy(value,"###NoArg###");
+		return -1;
+	}
+	return 0;	
+}
+
+char * StrPack( char *str )
+{
+	int i;
+	int b1,e1;
+
+	for (i = 0; str[i]==' '|| str[i]=='\t'|| str[i]==0x0A || str[i]==0x0D; i++) ;
+
+	b1 = i;
+
+	for (i = strlen(str)-1; i >= b1 && (str[i] == ' ' || str[i] == '\t' || str[i] == 0x0A || str[i]==0x0D); i--);
+
+	e1 = i;
+
+	if (e1 >= b1)
+		memcpy( str, str+b1, e1-b1+1 );
+
+	str[e1 - b1 + 1] = 0;
+
+	return str;
+}
+
+int nCConnectSocket(unsigned short Port, char *Ip_addr, int nConnTryMaxNum)
+{
+	struct sockaddr_in   Sin;
+	int   Socket_id, Flag, Error, RetryTimeSap = 2, nRetryFlag = 0;
+	int   ConnectTryNum;/*链接尝试次数*/
+
+	memset(&Sin, 0, sizeof(struct sockaddr_in));
+	Sin.sin_port = htons(Port);
+	Sin.sin_family = AF_INET;
+	Sin.sin_addr.s_addr = inet_addr(Ip_addr);
+
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"nCConnectSocket begin");
+
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, 
+			"IP[%s] PORT[%d]", Ip_addr, Port);
+	ConnectTryNum=0;
+	while(ConnectTryNum++ < nConnTryMaxNum)
+	{
+		if ((Socket_id = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "socket, %d error", errno);
+			sleep(1);
+		}
+
+		if (connect(Socket_id, (struct sockaddr *)&Sin, sizeof(struct sockaddr_in)) < 0)
+		{
+			CommonRTrim ( Ip_addr );
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+					"connect error, %s , ip=[%s] , port=[%d]", 
+					strerror(errno),Ip_addr , Port);
+			close(Socket_id);
+			if (errno == ECONNREFUSED)
+			{
+				sleep(1);
+				continue;
+			}
+			sleep(1);
+			continue;
+		}
+
+		break;
+	}
+
+
+
+	/*链接最大次数后，退出*/
+	if(ConnectTryNum > nConnTryMaxNum)
+	{
+
+		HtLog(gsLogFile,HT_LOG_MODE_ERROR,__FILE__,__LINE__,"Connect Times:%d error",ConnectTryNum-1);
+		return -1;
+	}
+
+
+	HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"nCConnectSocket end");
+	return(Socket_id);
+}
+
+void   vCTimeOUt()
+{
+	HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"没有收到主机的返回数据。请检查日志文件，查看细节。");
+}
+void GetFieldValueCust(struct XmlNode *pstNodeBody, char * sFieldName,int nTimes,char * sptBuf)
+{
+	char sBuf[200];
+
+	memset(sBuf,0x00,sizeof(sBuf));
+	GetFieldValue(pstNodeBody,sFieldName, 1, sBuf);
+	memcpy(sptBuf,sBuf,strlen(sBuf));
+}
+void GetDate(char * sDate)
+{
+	char  sTmpDateTime[15];
+	memset(sTmpDateTime,0,sizeof(sTmpDateTime));
+	CommonGetCurrentTime(sTmpDateTime);
+	memcpy(sDate,sTmpDateTime,8);
+}
+void GetTime(char * sTime)
+{
+	char	sTempTime[20];
+	char	sMilliTM[4];
+	struct timeb tTimeB;
+	struct tm	*tTmLocal;
+
+	/* get current time */
+	memset (sTempTime, 0x00, sizeof(sTempTime));
+	memset (sMilliTM, 0x00, sizeof(sMilliTM));
+
+	memset(&tTimeB, 0, sizeof(struct timeb));
+	ftime(&tTimeB);
+	sprintf(sMilliTM, "%03d", tTimeB.millitm);
+	tTmLocal = localtime (&tTimeB.time);
+	strftime (sTempTime, sizeof(sTempTime), "%H%M%S", tTmLocal);
+	strcat(sTempTime, sMilliTM);
+	memcpy(sTime,sTempTime,9);
+}
+void CreateESBsequence(T_IpcIntMngDef *ptIpcIntMng )
+{
+	char	sCurrentTime[15];
+
+	/* 业务流水号客户化 */
+	memset(sCurrentTime, 0, sizeof(sCurrentTime));
+	CommonGetCurrentTime(sCurrentTime);
+
+	memcpy(ptIpcIntMng->sMisc2,"560901",6);
+	memcpy(ptIpcIntMng->sMisc2+6,sCurrentTime+2,6);
+	memcpy(ptIpcIntMng->sMisc2+12,sCurrentTime+8,6);
+	memcpy(ptIpcIntMng->sMisc2+18,getenv("SRV_USAGE_KEY"),1);
+	memcpy(ptIpcIntMng->sMisc2+19,ptIpcIntMng->sSysSeqNum+3,3);
+
+}
+
+int nCSocketRcv1(int vhDataSocket, void* vvpTcpData, int* vnpExpDataL, int vnRcvFlg)
+{
+    int           lnDataL;
+    int           lnTotalDataL;
+    char*         lspTcpData;
+
+    lspTcpData = vvpTcpData;
+    lnTotalDataL = 0;
+    HtLog(gsLogFile,HT_LOG_MODE_ERROR,__FILE__,__LINE__,"lspTcpData=[%s]", lspTcpData);
+    HtLog(gsLogFile,HT_LOG_MODE_ERROR,__FILE__,__LINE__,"vnpExpDataL=[%d]", *vnpExpDataL);
+    if(*vnpExpDataL > lnTotalDataL)
+    {
+        if((lnDataL = recv( vhDataSocket, lspTcpData, *vnpExpDataL - lnTotalDataL, vnRcvFlg)) <= 0)
+        {
+            HtLog(gsLogFile,HT_LOG_MODE_ERROR,__FILE__,__LINE__,"lnDataL=[%d]", lnDataL);
+            *vnpExpDataL = lnTotalDataL;
+            return -1;
+        }
+
+        HtLog(gsLogFile,HT_LOG_MODE_ERROR,__FILE__,__LINE__,"lnDataL=[%d]", lnDataL);
+        lnTotalDataL += lnDataL;
+        HtLog(gsLogFile,HT_LOG_MODE_ERROR,__FILE__,__LINE__,"lnTotalDataL=[%d]", lnTotalDataL);
+        HtLog(gsLogFile,HT_LOG_MODE_ERROR,__FILE__,__LINE__,"lspTcpData=[%s]", lspTcpData);
+        //lspTcpData += lnDataL;
+    }
+    return 0;
+}

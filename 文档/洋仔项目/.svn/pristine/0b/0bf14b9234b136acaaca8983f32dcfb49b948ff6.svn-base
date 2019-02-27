@@ -1,0 +1,190 @@
+/*
+ *  Copyright 2006, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  $Id$
+ *
+ *  function: table tbl_mer_func_inf operator function
+ *
+ *  Edit History:
+ *
+ *  20110526 -gendb
+ */
+ 
+#include "DbsDef.h"
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+EXEC SQL BEGIN DECLARE SECTION;
+struct TBL_MER_FUNC_INF_Def {
+    int        func_id;
+    int        func_parent_id;
+    char       func_type[2];
+    char       func_name[51];
+    char       page_name[51];
+    char       page_url[1025];
+    char       page_target[21];
+    char       misc1[101];
+    char       misc2[101];
+    char       description[1025];
+    char       rec_upd_opr[41];
+    char       rec_crt_ts[15];
+    char       rec_upd_ts[15];
+} ltTBL_MER_FUNC_INF;
+short s_ind;
+char  s_count[33];
+EXEC SQL END DECLARE SECTION;
+
+/*************************************************************************/
+/*    input : DBS_FUNC   the dbs func                                    */
+/*            The struct pointer defined in upper.                       */
+/*    return : the sqlca.sqlcode                                         */
+/*************************************************************************/
+int DbsTBL_MER_FUNC_INF(int ifunc, struct TBL_MER_FUNC_INF_Def *pTBL_MER_FUNC_INF)
+{
+    memcpy(&ltTBL_MER_FUNC_INF, pTBL_MER_FUNC_INF, sizeof(ltTBL_MER_FUNC_INF));
+
+    switch (ifunc) {
+    case DBS_SELECT1 :
+        EXEC SQL SELECT
+            FUNC_ID ,
+            FUNC_PARENT_ID ,
+            FUNC_TYPE ,
+            FUNC_NAME ,
+            PAGE_NAME ,
+            PAGE_URL ,
+            PAGE_TARGET ,
+            MISC1 ,
+            MISC2 ,
+            DESCRIPTION ,
+            REC_UPD_OPR ,
+            REC_CRT_TS ,
+            REC_UPD_TS
+        INTO
+            :ltTBL_MER_FUNC_INF.func_id :s_ind ,
+            :ltTBL_MER_FUNC_INF.func_parent_id :s_ind ,
+            :ltTBL_MER_FUNC_INF.func_type :s_ind ,
+            :ltTBL_MER_FUNC_INF.func_name :s_ind ,
+            :ltTBL_MER_FUNC_INF.page_name :s_ind ,
+            :ltTBL_MER_FUNC_INF.page_url :s_ind ,
+            :ltTBL_MER_FUNC_INF.page_target :s_ind ,
+            :ltTBL_MER_FUNC_INF.misc1 :s_ind ,
+            :ltTBL_MER_FUNC_INF.misc2 :s_ind ,
+            :ltTBL_MER_FUNC_INF.description :s_ind ,
+            :ltTBL_MER_FUNC_INF.rec_upd_opr :s_ind ,
+            :ltTBL_MER_FUNC_INF.rec_crt_ts :s_ind ,
+            :ltTBL_MER_FUNC_INF.rec_upd_ts :s_ind
+        FROM
+            tbl_mer_func_inf
+        WHERE
+            FUNC_ID = :ltTBL_MER_FUNC_INF.func_id;
+
+        memcpy(pTBL_MER_FUNC_INF, &ltTBL_MER_FUNC_INF, sizeof(ltTBL_MER_FUNC_INF));
+        break;
+
+    case DBS_OPEN1 :
+        EXEC SQL DECLARE
+            cur_tbl_mer_func_inf_1
+        CURSOR FOR SELECT
+            FUNC_ID ,
+            FUNC_PARENT_ID ,
+            FUNC_TYPE ,
+            FUNC_NAME ,
+            PAGE_NAME ,
+            PAGE_URL ,
+            PAGE_TARGET ,
+            MISC1 ,
+            MISC2 ,
+            DESCRIPTION ,
+            REC_UPD_OPR ,
+            REC_CRT_TS ,
+            REC_UPD_TS
+        FROM
+            tbl_mer_func_inf
+        WHERE
+            FUNC_ID = :ltTBL_MER_FUNC_INF.func_id;
+
+        EXEC SQL OPEN cur_tbl_mer_func_inf_1;
+        break;
+
+    case DBS_FETCH1 :
+        EXEC SQL FETCH cur_tbl_mer_func_inf_1
+        INTO
+            :ltTBL_MER_FUNC_INF.func_id :s_ind ,
+            :ltTBL_MER_FUNC_INF.func_parent_id :s_ind ,
+            :ltTBL_MER_FUNC_INF.func_type :s_ind ,
+            :ltTBL_MER_FUNC_INF.func_name :s_ind ,
+            :ltTBL_MER_FUNC_INF.page_name :s_ind ,
+            :ltTBL_MER_FUNC_INF.page_url :s_ind ,
+            :ltTBL_MER_FUNC_INF.page_target :s_ind ,
+            :ltTBL_MER_FUNC_INF.misc1 :s_ind ,
+            :ltTBL_MER_FUNC_INF.misc2 :s_ind ,
+            :ltTBL_MER_FUNC_INF.description :s_ind ,
+            :ltTBL_MER_FUNC_INF.rec_upd_opr :s_ind ,
+            :ltTBL_MER_FUNC_INF.rec_crt_ts :s_ind ,
+            :ltTBL_MER_FUNC_INF.rec_upd_ts :s_ind;
+
+        memcpy(pTBL_MER_FUNC_INF, &ltTBL_MER_FUNC_INF, sizeof(ltTBL_MER_FUNC_INF));
+        break;
+
+    case DBS_CLOSE1 :
+        EXEC SQL CLOSE cur_tbl_mer_func_inf_1;
+        break;
+
+    case DBS_INSERT :
+        EXEC SQL INSERT INTO tbl_mer_func_inf (
+            FUNC_ID ,
+            FUNC_PARENT_ID ,
+            FUNC_TYPE ,
+            FUNC_NAME ,
+            PAGE_NAME ,
+            PAGE_URL ,
+            PAGE_TARGET ,
+            MISC1 ,
+            MISC2 ,
+            DESCRIPTION ,
+            REC_UPD_OPR ,
+            REC_CRT_TS ,
+            REC_UPD_TS
+        ) VALUES (
+            :ltTBL_MER_FUNC_INF.func_id ,
+            :ltTBL_MER_FUNC_INF.func_parent_id ,
+            :ltTBL_MER_FUNC_INF.func_type ,
+            :ltTBL_MER_FUNC_INF.func_name ,
+            :ltTBL_MER_FUNC_INF.page_name ,
+            :ltTBL_MER_FUNC_INF.page_url ,
+            :ltTBL_MER_FUNC_INF.page_target ,
+            :ltTBL_MER_FUNC_INF.misc1 ,
+            :ltTBL_MER_FUNC_INF.misc2 ,
+            :ltTBL_MER_FUNC_INF.description ,
+            :ltTBL_MER_FUNC_INF.rec_upd_opr ,
+            :ltTBL_MER_FUNC_INF.rec_crt_ts ,
+            :ltTBL_MER_FUNC_INF.rec_upd_ts
+        );
+        break;
+
+    default :
+        return -1;
+    }
+
+    return sqlca.sqlcode;
+}
+
+
+int DbsCntTBL_MER_FUNC_INF(int ifunc, char *psCount)
+{
+    memset(s_count, 0, sizeof(s_count));
+
+    switch (ifunc) {
+    default :
+        return -1;
+    }
+
+    return sqlca.sqlcode;
+}

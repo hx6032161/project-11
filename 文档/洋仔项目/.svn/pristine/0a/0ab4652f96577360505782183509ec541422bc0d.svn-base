@@ -1,0 +1,438 @@
+/****************************************************************************/
+/*程序名：ProOrgMonthReport.c                                                  */
+/*程序描述：专业服务机构月报                                */
+/****************************************************************************/
+
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include "pos_stlm.h"
+#include "MRpt.h"
+
+//20120209赵浩添加
+typedef struct viw_professional_organ_table{
+char   org_id   [6+1];
+char   org_name [50+1];
+char   mcht_no  [15+1];
+char   mcht_nm  [60+1];
+char   mcc      [4+1];
+char   agr_br   [6+1];
+char   oper_no  [8+1];
+char   oper_nm  [10+1];
+double rate   ;  
+char   branch   [8+1];
+char   rate_type[1+1];
+char   term_id  [12+1];
+} VIW_PROFESSIONAL_ORGAN_Def;
+
+typedef struct {
+  char        date_settlmt    [  9];
+  char        brh_id          [  5];
+  char        mcht_cd         [ 16];
+  char        term_id         [  9];
+  char        trans_time      [  7];
+  char        pan             [ 20];
+  char        sys_seq_num     [  7];
+  char        term_ssn        [ 13];
+  char        t_0_flag        [  2];
+  char        txn_num         [  5];
+  double      amt_trans ;
+  double      mcht_fee  ;
+  double      cups_fee  ;
+  double      t_1_amt   ;
+  double      t_0_amt  ;
+  double      acq_inst_id_fee;
+  char        misc_1          [ 31];
+}tbl_mcht_txn_def;
+
+#define  RPT_ID           "PROORGMCHTREPORT"    /*存放报表的文件名*/
+
+int ProOrgMonthReport(char * Stlm_date){
+	 char InitDate[8+1];
+	 char Year[4+1];
+	 char Year1[4+1];
+	 char month1[4+1];
+	 char suanfa[40];
+	 char year[4+1];
+	 char month[2+1];
+	 char day[2+1];
+	 char Month[2+1];
+	 char Day[2+1];
+	 char Date[6+1];
+	 double rate=0.0;//用来存放费率
+	 char caLastdate[8+1];
+	 char BranchFileName[256];
+	 char HeadFileName[256];
+	 char Sql_Cmd[512];
+	 FILE *fp1=NULL;//记录总行的信息
+	 FILE *fp2=NULL;//记录分行的信息
+	 int nRc=0;
+	 char org_id[6+1];
+	 int branchnum=0;
+	 int branchnum1=0;//用来和branchnum比较
+	 int ncount=0;//分行序号
+	 int ncount1=0;//总行序号
+	 int ncounttmp=0;//分行序号
+	 int ncount1tmp=0;//总行序号
+	 int transnum=0;
+	 int ntransnum=0;
+	 int totalntransnum=0;
+	 int ntotalntransnum=0;
+	 double transamt=0.0;//单条信息
+	 double ntransamt=0.0;//小计
+	 double totalntransamt=0.0;//分行合计
+	 double ntotalntransamt=0.0;//总行合计
+	 double mchtfee=0.0;
+	 double nmchtfee=0.0;
+	 double totalnmchtfee=0.0;
+	 double ntotalnmchtfee=0.0;
+	 double cupfee=0.0;
+	 double ncupfee=0.0;
+	 double totalncupfee=0.0;
+	 double ntotalncupfee=0.0;
+	 double amt=0.0;//记录费用金额
+	 double namt=0.0;
+	 double totalnamt=0.0;
+	 double ntotalnamt=0.0;
+	 tbl_mcht_txn_def tblmchttxn;
+	 VIW_PROFESSIONAL_ORGAN_Def proorgan;
+	 tbl_brh_info_def tblbrhinfo;
+	 char * sFmtHead[]=
+   {
+   		"专业化服务机构月报（%s）\n",
+   		"机构编号：%4s,机构名称：%s,报表月份：%-4s年%-2s月,生成日期：%4s年%2s月%2s日,\n",
+   		"序号,服务机构编号,服务机构名称,商户号,商户名称,MCC,签约网点,客户经理号,客户经理姓名,交易笔数,交易金额,应付银联手续费,应收商户手续费,手续费净额,费率(%%),费用金额,算法,\n",
+   		"%-8d,%-14s,%-50s,%-15s,%-50s,%-8s,%-10s,%-12s,%-12s,%-18d,%-24.2lf,%-24.2lf,%-24.2lf,%-24.2lf,%-10.2lf,%-24.2lf,%-25s,\n",
+   		"小计: ,,,,,,,,,%-18d,%-24.2lf,%-24.2lf,%-24.2lf,%-24.2lf,,%-24.2lf,\n",
+   		"合计: ,,,,,,,,,%-18d,%-24.2lf,%-24.2lf,%-24.2lf,%-24.2lf,,%-24.2lf,\n",
+   };
+   memset(InitDate,0x00,sizeof(InitDate));
+   CalNewDate(Stlm_date,-2,InitDate);
+   HtLog( StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "InitDate: [%s]", InitDate);
+   memset(caLastdate,0x00,sizeof(caLastdate));
+   GetLastDay(InitDate,caLastdate);
+   HtLog( StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "caLastdate: [%s]", caLastdate);
+   if(strcmp(InitDate,caLastdate)!=0){
+        HtLog( StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "不是月末不生成报表\n");
+        return 0;
+   }
+   memset(Year,0x00,sizeof(Year));
+   memset(Month,0x00,sizeof(Month));
+   memset(Day,0x00,sizeof(Day));
+   strncpy(Year,Stlm_date,sizeof(Year)-1);
+   strncpy(Month,Stlm_date+4,sizeof(Month)-1);
+   strncpy(Day,Stlm_date+6,sizeof(Day)-1);
+   
+   memset(year,0x00,sizeof(year));
+   memset(month,0x00,sizeof(month));
+   memset(day,0x00,sizeof(day));
+   
+   strncpy(year,InitDate,sizeof(year)-1);
+   strncpy(month,InitDate+4,sizeof(month)-1);
+   strncpy(day,InitDate+6,sizeof(day)-1);
+   
+   memset(Date,0x00,sizeof(Date));
+   strncpy(Date,InitDate,sizeof(Date)-1);
+
+   
+   memset(Year1,0x00,sizeof(Year1));
+   strncpy(Year1,Date,sizeof(Year1)-1);
+   memset(month1,0x00,sizeof(month1));
+   strncpy(month1,Date+4,sizeof(month1)-1);
+   memset(HeadFileName,0x00,sizeof(HeadFileName));
+   sprintf(HeadFileName,"%s/report/%s%s%s/%s/%s%s_%s%s.csv", getenv("RPTHOME"),year,month,"01","9900",RPT_ID,"9900",year,month);
+   fp1=fopen(HeadFileName,"w+");
+   if(fp1==NULL){
+    	HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "HeadFileName: [%s]", HeadFileName);
+      HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "fopen HeadFileName error: %d", nRc);
+      return -1;
+   }
+   fprintf(fp1,sFmtHead[0],"无锡农村商业银行总行");
+   fprintf(fp1,sFmtHead[1],"14373020","无锡农村商业银行总行",Year1,month1,Year,Month,Day);
+   fprintf(fp1,sFmtHead[2]);
+   
+   ntotalntransnum=0;
+   ntotalntransamt=0.0;
+   ntotalnmchtfee=0.0;
+   ntotalncupfee=0.0;
+   ntotalnamt=0.0;
+   ncount1=0;
+   ncount1tmp=0;
+   memset(Sql_Cmd,0x00,sizeof(Sql_Cmd));
+   sprintf(Sql_Cmd,"select * from tbl_brh_info where brh_level in ('0','1') and brh_sta='0' order by brh_id");
+   nRc=OpenCursorTBL_BRH_INFO(Sql_Cmd);
+   if(nRc){
+        HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "sSql=[%s]\n",Sql_Cmd);
+        HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "OpenCursurTBL_BRH_INFO error: %d", nRc);
+        fclose(fp1);
+        return -1;
+   }
+   while(1)
+   {
+   		memset(&tblbrhinfo,0x00,sizeof(tbl_brh_info_def));
+   		nRc=FetchCursorTBL_BRH_INFO(&tblbrhinfo);
+			if(nRc == SQL_NOTFOUND){
+				HtLog( StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "data not found[%d]\n",nRc);
+				break;
+			}
+			else if(nRc){
+				HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "FetchCursorTBL_BRH_INFO error: %s\n", DbsError());
+				CloseCursorTBL_BRH_INFO();
+				fclose(fp1);
+				return -1;
+			}
+			
+			/*branchnum=0;
+			memset(org_id,0x00,sizeof(org_id));
+			memset(Sql_Cmd,0x00,sizeof(Sql_Cmd));
+			sprintf(Sql_Cmd,"select count(mcht_no),org_id from viw_professional_organ where branch='%s' group by org_id order by org_id",tbl_brh_info.brh_id);
+			nRc=DbsSELintZH(DBS_SELECT1,Sql_Cmd,&branchnum,org_id);
+			if(nRc){
+				HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsSELint error: %s\n", DbsError());
+				CloseCursorTBL_BRH_INFO();
+				fclose(fp1);
+				return -1;
+			}
+			CommonRTrim(org_id);*/
+			
+			CommonRTrim(tblbrhinfo.brh_id);
+			CommonRTrim(tblbrhinfo.brh_name);
+			memset(BranchFileName,0x00,sizeof(BranchFileName));
+			sprintf(BranchFileName,"%s/report/%s%s%s/%s/%s%s_%s%s.csv", getenv("RPTHOME"),year,month,"01",tblbrhinfo.brh_id,RPT_ID,tblbrhinfo.brh_id,year,month);
+			fp2=fopen(BranchFileName,"w+");
+			if(fp2==NULL){
+				HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "BranchFileName: [%s]", BranchFileName);
+        HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "fopen BranchFileName error: %d", nRc);
+        CloseCursorTBL_BRH_INFO();
+        fclose(fp1);
+        fclose(fp2);
+        return -1;
+			}
+			fprintf(fp2,sFmtHead[0],tblbrhinfo.brh_name);
+			fprintf(fp2,sFmtHead[1],tblbrhinfo.brh_id,tblbrhinfo.brh_name,Year1,month1,Year,Month,Day);
+			fprintf(fp2,sFmtHead[2]);
+			memset(Sql_Cmd,0x00,sizeof(Sql_Cmd));
+			sprintf(Sql_Cmd,"select * from viw_professional_organ where branch='%s' order by org_id",tblbrhinfo.brh_id);
+			HtLog( StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "sSql=[%s]\n",Sql_Cmd);
+			nRc=OpenCursorVIW_PROFESSIONAL_ORGAN(Sql_Cmd);
+			if(nRc){
+				HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "sSql=[%s]\n",Sql_Cmd);
+        HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "OpenCursorVIW_PROFESSIONAL_ORGAN error: %d", nRc);
+        fclose(fp1);
+        fclose(fp2);
+        CloseCursorTBL_BRH_INFO();
+        return -1;
+			}
+			totalntransnum=0;
+			totalntransamt=0.0;
+			totalncupfee=0.0;
+			totalnmchtfee=0.0;
+			totalnamt=0.0;
+			ntransnum=0;
+			ntransamt=0.0;
+			nmchtfee=0.0;
+			ncupfee=0.0;
+			namt=0.0;
+			ncount=0;
+			ncounttmp=0;
+			branchnum1=0;
+			while(1)
+			{
+				rate=0.0;
+				memset(&proorgan,0x00,sizeof(VIW_PROFESSIONAL_ORGAN_Def));
+				nRc=FetchCursorVIW_PROFESSIONAL_ORGAN(&proorgan);
+				if(nRc == SQL_NOTFOUND){
+					HtLog( StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "data not found[%d]\n",nRc);
+					break;
+				}
+				else if(nRc){
+					HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "CloseCursorVIW_PROFESSIONAL_ORGAN error: %s\n", DbsError());
+					CloseCursorTBL_BRH_INFO();
+					CloseCursorVIW_PROFESSIONAL_ORGAN();
+					fclose(fp1);
+					fclose(fp2);
+					return -1;
+				}
+				CommonRTrim(proorgan.org_id);
+				CommonRTrim(proorgan.org_name);
+				CommonRTrim(proorgan.mcht_no);
+				CommonRTrim(proorgan.mcht_nm);
+				CommonRTrim(proorgan.mcc);
+				CommonRTrim(proorgan.agr_br);
+				CommonRTrim(proorgan.oper_no);
+				CommonRTrim(proorgan.oper_nm);
+				CommonRTrim(proorgan.branch);
+				CommonRTrim(proorgan.rate_type);
+				CommonRTrim(proorgan.term_id);
+
+				if(branchnum1==0){
+					branchnum=0;
+					memset(Sql_Cmd,0x00,sizeof(Sql_Cmd));
+					sprintf(Sql_Cmd,"select count(org_id) from viw_professional_organ where org_id='%s' order by org_id ",proorgan.org_id);
+					nRc=DbsSELint(DBS_SELECT1,Sql_Cmd,&branchnum);
+					if(nRc){
+						HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsSELint error: %s\n", DbsError());
+						CloseCursorTBL_BRH_INFO();
+						fclose(fp1);
+						return -1;
+					}
+					branchnum1++;
+				}
+				
+				rate=proorgan.rate;
+				transnum=0;
+				memset(Sql_Cmd,0x00,sizeof(Sql_Cmd));
+				sprintf(Sql_Cmd,"select count(date_settlmt) from tbl_mcht_txn where substr(date_settlmt,1,6)='%s' and brh_id='%s'and mcht_cd='%s' and term_id='%s'",Date,tblbrhinfo.brh_id,proorgan.mcht_no,proorgan.term_id);
+				nRc=DbsSELint(DBS_SELECT1,Sql_Cmd,&transnum);
+				if(nRc){
+					HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsSELint error: %s\n", DbsError());
+					CloseCursorTBL_BRH_INFO();
+					CloseCursorVIW_PROFESSIONAL_ORGAN();
+					fclose(fp1);
+					fclose(fp2);
+					return -1;
+				}
+				totalntransnum+=transnum;
+				ntransnum+=transnum;
+				ntotalntransnum+=transnum;
+				transamt=0.0;
+				memset(Sql_Cmd,0x00,sizeof(Sql_Cmd));
+				sprintf(Sql_Cmd,"select nvl(sum(amt_trans),0) from tbl_mcht_txn where substr(date_settlmt,1,6)='%s' and brh_id='%s'and mcht_cd='%s' and term_id='%s'",Date,tblbrhinfo.brh_id,proorgan.mcht_no,proorgan.term_id);
+				nRc=DbsSELdouble(DBS_SELECT1,Sql_Cmd,&transamt);
+				if(nRc){
+					HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsSELdouble error: %s\n", DbsError());
+					CloseCursorTBL_BRH_INFO();
+					CloseCursorVIW_PROFESSIONAL_ORGAN();
+					fclose(fp1);
+					fclose(fp2);
+					return -1;
+				}
+				totalntransamt+=transamt;
+				ntransamt+=transamt;
+				ntotalntransamt+=transamt;
+				mchtfee=0.0;
+				memset(Sql_Cmd,0x00,sizeof(Sql_Cmd));
+				sprintf(Sql_Cmd,"select nvl(sum(mcht_fee),0) from tbl_mcht_txn where substr(date_settlmt,1,6)='%s' and brh_id='%s' and mcht_cd='%s' and term_id='%s'",Date,tblbrhinfo.brh_id,proorgan.mcht_no,proorgan.term_id);
+				nRc=DbsSELdouble(DBS_SELECT1,Sql_Cmd,&mchtfee);
+				if(nRc){
+					HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsSELdouble error: %s\n", DbsError());
+					CloseCursorTBL_BRH_INFO();
+					CloseCursorVIW_PROFESSIONAL_ORGAN();
+					fclose(fp1);
+					fclose(fp2);
+					return -1;
+				}
+				totalnmchtfee+=mchtfee;
+				nmchtfee+=mchtfee;
+				ntotalnmchtfee+=mchtfee;
+				cupfee=0.0;
+				memset(Sql_Cmd,0x00,sizeof(Sql_Cmd));
+				sprintf(Sql_Cmd,"select nvl(sum(cups_fee),0) from tbl_mcht_txn where substr(date_settlmt,1,6)='%s' and brh_id='%s'and mcht_cd='%s' and term_id='%s'",Date,tblbrhinfo.brh_id,proorgan.mcht_no,proorgan.term_id);
+				nRc=DbsSELdouble(DBS_SELECT1,Sql_Cmd,&cupfee);
+				if(nRc){
+					HtLog( StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsSELdouble error: %s\n", DbsError());
+					CloseCursorTBL_BRH_INFO();
+					CloseCursorVIW_PROFESSIONAL_ORGAN();
+					fclose(fp1);
+					fclose(fp2);
+					return -1;
+				}
+				totalncupfee+=cupfee;
+				ncupfee+=cupfee;
+				ntotalncupfee+=cupfee;
+				amt=0.0;
+				memset(suanfa,0x00,sizeof(suanfa));
+				//计算费用金额的时候，如果前面的值小于0,则费用金额直接取0
+				if(strcmp(proorgan.rate_type,"0")==0){
+					if(mchtfee>=0.005){
+						amt=mchtfee*rate/100;
+				  }
+				  else{
+				  	amt=0.0;
+				  }
+					strncpy(suanfa,"应收商户手续费x费率",sizeof(suanfa)-1);
+				}
+				else if(strcmp(proorgan.rate_type,"1")==0){
+					if(cupfee>=0.005){
+						amt=cupfee*rate/100;
+				  }
+				  else{
+				  		amt=0.0;
+				  }
+					strncpy(suanfa,"应付银联手续费x费率",sizeof(suanfa)-1);
+				}
+				else if(strcmp(proorgan.rate_type,"2")==0){
+					if((mchtfee-cupfee)>=0.005){
+						amt=(mchtfee-cupfee)*rate/100;
+				  }
+				  else{
+				  	amt=0.0;
+				  }
+					strncpy(suanfa,"手续费净额x费率",sizeof(suanfa)-1);
+				}
+				else{
+					HtLog( StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "获取不存在的费用算法[%s]", proorgan.rate_type);
+					CloseCursorTBL_BRH_INFO();
+					CloseCursorVIW_PROFESSIONAL_ORGAN();
+					fclose(fp1);
+					fclose(fp2);
+					return -1;
+				}
+				
+				totalnamt+=amt;
+				namt+=amt;
+				ntotalnamt+=amt;
+				
+				/*if(ncounttmp==branchnum){
+					HtLog( StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "小计");
+					fprintf(fp2,sFmtHead[4],ntransnum,ntransamt,ncupfee,nmchtfee,nmchtfee-ncupfee,namt);
+					fprintf(fp1,sFmtHead[4],ntransnum,ntransamt,ncupfee,nmchtfee,nmchtfee-ncupfee,namt);
+					ncounttmp=0;
+					ncount1tmp=0;
+				}
+				else {
+					ncounttmp++;
+			    ncount1tmp++;
+					ncount++;
+					ncount1++;
+					//记录分行数据
+					fprintf(fp2,sFmtHead[3],ncount,proorgan.org_id,proorgan.org_name,proorgan.mcht_no,proorgan.mcht_nm,proorgan.mcc,proorgan.agr_br,proorgan.oper_no,proorgan.oper_nm,transnum,transamt,cupfee,mchtfee,mchtfee-cupfee,rate,amt);
+					//记录总行数据
+					fprintf(fp1,sFmtHead[3],ncount1,proorgan.org_id,proorgan.org_name,proorgan.mcht_no,proorgan.mcht_nm,proorgan.mcc,proorgan.agr_br,proorgan.oper_no,proorgan.oper_nm,transnum,transamt,cupfee,mchtfee,mchtfee-cupfee,rate,amt);
+			  }*/
+				ncounttmp++;
+				ncount1tmp++;
+				ncount++;
+				ncount1++;
+				//记录分行数据
+				fprintf(fp2,sFmtHead[3],ncount,proorgan.org_id,proorgan.org_name,proorgan.mcht_no,proorgan.mcht_nm,proorgan.mcc,proorgan.agr_br,proorgan.oper_no,proorgan.oper_nm,transnum,transamt,cupfee,mchtfee,mchtfee-cupfee,rate,amt,suanfa);
+				//记录总行数据
+				fprintf(fp1,sFmtHead[3],ncount1,proorgan.org_id,proorgan.org_name,proorgan.mcht_no,proorgan.mcht_nm,proorgan.mcc,proorgan.agr_br,proorgan.oper_no,proorgan.oper_nm,transnum,transamt,cupfee,mchtfee,mchtfee-cupfee,rate,amt,suanfa);
+				if(ncounttmp==branchnum){
+
+					fprintf(fp2,sFmtHead[4],ntransnum,ntransamt,ncupfee,nmchtfee,nmchtfee-ncupfee,namt);
+					fprintf(fp1,sFmtHead[4],ntransnum,ntransamt,ncupfee,nmchtfee,nmchtfee-ncupfee,namt);
+					ncounttmp=0;
+					ncount1tmp=0;
+					ntransnum=0;
+					ntransamt=0.0;
+					ncupfee=0.0;
+					nmchtfee=0.0;
+					branchnum1=0;
+					namt=0.0;
+				}	
+			  
+			}
+			fprintf(fp2,sFmtHead[5],totalntransnum,totalntransamt,totalncupfee,totalnmchtfee,totalnmchtfee-totalncupfee,totalnamt);
+			CloseCursorVIW_PROFESSIONAL_ORGAN();
+			fclose(fp2);
+   } 
+   fprintf(fp1,sFmtHead[5],ntotalntransnum,ntotalntransamt,ntotalncupfee,ntotalnmchtfee,ntotalnmchtfee-ntotalncupfee,ntotalnamt);   
+   CloseCursorTBL_BRH_INFO();
+   fclose(fp1);
+   return 0;
+}
+
+

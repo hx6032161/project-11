@@ -1,0 +1,30 @@
+/*
+ *  Copyright 2006-2008, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  function:db.h
+ *
+ *  Edit History:
+ *
+ *     2009/08/27 -gendb
+ */
+
+#ifndef _TBL_MON_EVENT_DEF_DEF_H
+#define _TBL_MON_EVENT_DEF_DEF_H
+/*   Default values for table tbl_mon_event_def.    */
+#define	event_id_DEF	" "
+#define	attr_id_DEF	" "
+#define	attr_name_DEF	" "
+#define	mea_unit_DEF	" "
+#define	max_val_DEF	" "
+#define	num_flg_DEF	" "
+#define	mon_flg_DEF	" "
+#define	max_flg_DEF	" "
+
+#endif

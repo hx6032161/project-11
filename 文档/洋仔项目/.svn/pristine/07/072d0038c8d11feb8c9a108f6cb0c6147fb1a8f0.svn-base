@@ -1,0 +1,38 @@
+#ifndef TL_HDR_FILE_C001COMM
+#define TL_HDR_FILE_C001COMM
+
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <sys/times.h>
+
+#include "SrvDef.h"
+#include "DbsDef.h"
+#include "DbsTbl.h"
+#include "ErrCode.h"
+#include "MsqOpr.h"
+#include "HtLog.h"
+#include "IpcInt.h"
+#include "LineStat.h"
+
+#define SAMEnvCommMsgLenFmt             "TL_COMM_MSG_LEN_FORMAT"
+#define SAMEnvCommMode                  "TL_COMM_MODE"
+#define SAMEnvCommTimeOver              "TL_COMM_TIME_OVER"
+#define SAMEnvCommLineCfgKey			"TL_COMM_LINE_CFG_KEY"
+
+#define NCRetryTimeDft                  5
+#define LCPauseDft                      10
+#define NCMaxPortN                      8
+#define NCListenBlkLogNDft              5
+#define NCMaxTcpMsgLenL                 4
+#define RETRYNUM                        5
+#define NCMaxMsgBufLen                  1024
+
+#endif

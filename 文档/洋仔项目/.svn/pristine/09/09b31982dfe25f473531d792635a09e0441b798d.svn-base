@@ -1,0 +1,454 @@
+/*******************************************************
+ *功    能: 导入亚银商户入账文件
+ *文 件 名: YYC1_grandTotal_YYYYMMDD.csv
+ *编程人员
+ *编程时间: 
+ *修改人员: 
+ *修改时间:
+ *修改原因:
+ *备    注:
+ ******************************************************************/
+
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+
+#include "DbsDef.h"
+#include "HtLog.h"
+#include "pos_stlm.h"
+#include "Convert.h"
+#include "SrvDef.h"
+#include "SrvParam.h"
+#include "DbsDef.h"
+#include "DbsTbl.h"
+#include "ErrCode.h"
+#include "IpcInt.h"
+#include "MsqOpr.h"
+#include "HtLog.h"
+#include "CvtOpr.h"
+#include "EncOpr.h"
+#include "TxnNum.h"
+#include "POSdb.h"
+#include "unionAPI.h"
+
+void AllTrim(char *str)
+{
+    char *p,*q;
+    if(str == NULL)
+        return ;
+    for(p=str; *p==' '; ++p);
+    if(*p == 0)
+    {
+        *str=0;
+        return ;
+    }
+    for(q=str; *p; ++p,++q)
+    {
+        *q=*p;
+    }
+    for(p=q-1;*p==' ';--p);
+    *(++p)='\0';
+}
+
+//截取从字符串sSrc中截取需要的长度
+static int getValueByDelim(char* sSrc, char* sDest, char *sDelim,int maxLen )
+{
+    char* sEnd;
+    int tmpLen=0;
+    int endLen=0;
+    if( *sSrc == '\0' || sSrc==NULL)
+    { 
+        return 1;
+    }
+
+
+    sEnd=strstr(sSrc, sDelim);
+    if(sEnd == NULL)
+    {   
+        strncpy(sDest,sSrc,maxLen);
+        return 2;
+    }
+
+    endLen=sEnd-sSrc;
+    sEnd=sSrc+endLen;
+    if(*sSrc == '\"')
+    {
+
+        if(maxLen<1 || maxLen>sEnd-sSrc-2)
+        {
+            tmpLen=sEnd-sSrc-2;
+            memcpy(sDest, sSrc+1, tmpLen);
+        }
+        else  
+        {
+            memcpy(sDest, sSrc+1, maxLen); 
+        }       
+    }
+    else
+    {
+
+        if(maxLen<1 || maxLen>sEnd-sSrc)
+        {
+            tmpLen=sEnd-sSrc;
+            memcpy(sDest, sSrc, tmpLen);
+
+        }
+        else
+        {
+            memcpy(sDest, sSrc, maxLen);       
+        }
+
+    }
+
+    strcpy(sSrc, sEnd + (long)strlen(sDelim));
+    sDest[maxLen]=0;
+    return 0;
+
+}    
+
+int  GetLastDate(char *sDate ,char* lastDate)   
+{   
+    int year,month,day;
+    sscanf(sDate,"%4d%2d%2d",&year,&month,&day);
+    if(day==1)
+    {
+        if(month==1)
+        {
+            year--;
+            day=31;
+            month=12;
+        }
+        else 
+        {
+            month--;
+            switch(month)
+            {		           
+                case 1:case 3:case 5:case 7: case 8:case 10:
+                    day=31;
+                    break;
+                case 4: case 6:case 9: case 11:
+                    day=30;
+                    break;		           	       
+                case 2:
+                    day=(year%4==0 && year%100!=0 || year%400==0) ? 29 : 28;
+                    break;
+            }  
+        } 
+    }
+    else 
+    {
+        day--;	
+    }   
+    sprintf(lastDate,"%04d%02d%02d",year,month,day);
+    return 0;  
+}
+
+
+int  MyLTrim( char * str)
+{
+    int sLen;
+    char *p=str;
+    while(1)
+    {
+        if(*p!=' ' )
+        {
+            break;	
+        }
+        p++;	
+    }
+    sLen=strlen(p);
+    strncpy(str,p,sLen);
+    str[sLen]=0;
+
+    return 0;	
+}
+
+void delspchars(char *p)
+{
+int i,j=0;
+for(i=0; p[i]!=0x00;i++)
+{
+if(p[i]!='-')
+p[j++]=p[i];
+}
+p[j]=0x00;
+}
+
+int load_online_settle_file(char *outdate)
+{
+
+    int rc;
+    char sysDate[9];
+    char fName[128];
+    char totalFileName[256];
+    char sComStr[20];
+    char sFileRecord[RECORD_LEN_MAX];
+    tbl_online_infile_def OlSetData;
+
+    FILE * fFile=NULL;
+    int point;
+    int nRec = 0;
+    int nRowNum= 0;
+
+    strcpy(sysDate,outdate);
+    sprintf(fName,"YYC1_grandTotal_%s.csv", outdate);
+    sprintf(totalFileName,"%s/%s/%s",getenv("HOST_TXN_FILE_PATH"),outdate,fName);
+
+    HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "sysDate=[%s]\n",sysDate);
+    HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "fName=[%s]\n",fName);
+    HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "totalFileName=[%s]\n",totalFileName);
+
+    if((fFile=fopen(totalFileName,"r"))==NULL)
+    {
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "sysDate=[%s]\n",sysDate);
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "fName=[%s]\n",fName);
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "totalFileName=[%s]\n",totalFileName);
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "open the file error\n ");
+        return(-1);
+    }
+
+    rc = DbsConnect();
+    if(rc)
+    {
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "dbsconnect error %d",rc);
+        return -1;
+    }
+
+    while(1)
+    {   
+        memset(sFileRecord,0,sizeof(sFileRecord));
+        if (fgets( sFileRecord, RECORD_LEN_MAX-1, fFile) == NULL)
+        {
+
+            HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "get file the data end");
+            break;
+        }
+	nRowNum++;
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "read [%dth] line[%s].", nRowNum, sFileRecord);
+
+        //if( strlen( sFileRecord) <= 2 || strncmp(sFileRecord,"银行机构号",10) == 0)
+        //if( strlen( sFileRecord) <= 2 || strncmp(sFileRecord,"机构号",10) == 0)
+        if( strlen( sFileRecord) <= 2 || nRowNum == 1)
+            continue;
+
+        memset(sComStr,0x00,sizeof(sComStr));
+        memset(&OlSetData,0,sizeof(tbl_online_infile_def));
+
+        strncpy(OlSetData.date_settlmt,outdate,8);
+        strncpy(OlSetData.type_flag, "O", 1);
+
+        getValueByDelim(sFileRecord,OlSetData.brh_code,",",10);
+        getValueByDelim(sFileRecord,OlSetData.pay_type,",",12);
+        getValueByDelim(sFileRecord,OlSetData.mcht_no,",",15);
+        getValueByDelim(sFileRecord,OlSetData.mcht_nm,",",60); 
+        getValueByDelim(sFileRecord,OlSetData.acct_nm,",",80);
+        getValueByDelim(sFileRecord,OlSetData.mcht_acct,",",40);
+        getValueByDelim(sFileRecord,sComStr,",",15);
+        MyLTrim(sComStr);
+        OlSetData.total_amt = atof(sComStr);
+
+        memset(sComStr,0x00,sizeof(sComStr));
+        getValueByDelim(sFileRecord,sComStr,",",15);
+        MyLTrim(sComStr);
+        OlSetData.discount_amt = atof(sComStr);
+
+        memset(sComStr,0x00,sizeof(sComStr));
+        getValueByDelim(sFileRecord,sComStr,",",15);
+        MyLTrim(sComStr);
+        OlSetData.actual_amt = atof(sComStr);
+
+	/* wendy @20160714 mod */
+        memset(sComStr,0x00,sizeof(sComStr));
+        getValueByDelim(sFileRecord,sComStr,",",12);
+        MyLTrim(sComStr);
+        OlSetData.total_num = atol(sComStr);
+
+        memset(sComStr,0x00,sizeof(sComStr));
+        getValueByDelim(sFileRecord,OlSetData.settle_cycle,"," ,1);
+        getValueByDelim(sFileRecord,OlSetData.settle_rate,"," ,10);
+        getValueByDelim(sFileRecord,sComStr,",",15);
+        MyLTrim(sComStr);
+        OlSetData.rate_amt = atof(sComStr);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "rate_amt[%s][%f].", sComStr, OlSetData.rate_amt);
+
+        memset(sComStr,0x00,sizeof(sComStr));
+        getValueByDelim(sFileRecord,sComStr,",",15);
+        MyLTrim(sComStr);
+#if 1
+        OlSetData.bank_fee = atof(sComStr);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "bank_fee[%f].",  OlSetData.bank_fee);
+#endif
+
+        memset(sComStr,0x00,sizeof(sComStr));
+        getValueByDelim(sFileRecord,sComStr,",",15);
+        MyLTrim(sComStr);
+        OlSetData.settle_fee = atof(sComStr);
+
+        memset(sComStr,0x00,sizeof(sComStr));
+        getValueByDelim(sFileRecord,sComStr,",",15);
+        MyLTrim(sComStr);
+        OlSetData.settle_amt = atof(sComStr);
+
+        memset(sComStr,0x00,sizeof(sComStr));
+        getValueByDelim(sFileRecord, sComStr, ",", 10);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "scomstr[%s].", sComStr);
+	delspchars(sComStr);
+        memcpy(OlSetData.check_data, sComStr, 8);
+	
+        OlSetData.settle_flag[0]='0';
+        strcpy(OlSetData.fail_resn, " ");
+        CommonGetCurrentTime(OlSetData.rec_crt_ts); 
+        CommonGetCurrentTime(OlSetData.rec_upd_ts);
+
+/*
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.brh_code [%s].", OlSetData.brh_code);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.date_settlmt[%s].", OlSetData.date_settlmt);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.type_flag[%s].", OlSetData.type_flag);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.mcht_no[%s].", OlSetData.mcht_no);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.mcht_acct[%s].", OlSetData.mcht_acct);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.acct_curr[%s].", OlSetData.acct_curr);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.total_amt[%f].", OlSetData.total_amt);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.discount_amt[%f].", OlSetData.discount_amt);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.actual_amt[%f].", OlSetData.actual_amt);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.total_num[%d].", OlSetData.total_num);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.settle_cycle[%s].", OlSetData.settle_cycle);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.settle_rate[%s].", OlSetData.settle_rate);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.rate_amt[%f].", OlSetData.rate_amt);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.settle_fee[%f].", OlSetData.settle_fee);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.settle_amt[%f].", OlSetData.settle_amt);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.bank_fee[%f].", OlSetData.bank_fee);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.check_data [%s].", OlSetData.check_data);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.settle_flag [%s].", OlSetData.settle_flag);
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "OlSetData.fail_resn [%s].", OlSetData.fail_resn);
+*/
+
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"date_settlmt[%s]",OlSetData.date_settlmt );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"type_flag   [%s]",OlSetData.type_flag    );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"brh_code    [%s]",OlSetData.brh_code     );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"pay_type    [%s]",OlSetData.pay_type     );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"mcht_no     [%s]",OlSetData.mcht_no      );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"mcht_nm     [%s]",OlSetData.mcht_nm      );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"acct_type   [%s]",OlSetData.acct_type    );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"acct_nm     [%s]",OlSetData.acct_nm      );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"mcht_acct   [%s]",OlSetData.mcht_acct    );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"acct_curr   [%s]",OlSetData.acct_curr    );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"total_amt   [%f]",OlSetData.total_amt    );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"actual_amt  [%f]",OlSetData.actual_amt   );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"discount_amt[%f]",OlSetData.discount_amt );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"total_num   [%d]",OlSetData.total_num    );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"settle_cycle[%s]",OlSetData.settle_cycle );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"settle_rate [%s]",OlSetData.settle_rate  );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"rate_amt    [%f]",OlSetData.rate_amt     );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"settle_fee  [%f]",OlSetData.settle_fee   );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"settle_amt  [%f]",OlSetData.settle_amt   );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"bank_fee    [%f]",OlSetData.bank_fee     );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"check_data  [%s]",OlSetData.check_data   );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"settle_flag [%s]",OlSetData.settle_flag  );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"fail_resn   [%s]",OlSetData.fail_resn    );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"rec_crt_ts  [%s]",OlSetData.rec_crt_ts   );
+HtLog(gsLogFile,HT_LOG_MODE_NORMAL,__FILE__,__LINE__,"rec_upd_ts  [%s]",OlSetData.rec_upd_ts   );
+
+        rc=DbsTBL_ONLINE_INFILE(DBS_INSERT,&OlSetData);
+
+        if( rc )
+        {             
+            HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "insert Error [%d]", rc);
+            HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "insert Error [%s]", DbsError());
+            continue;  
+            DbsRollback ();  
+            DbsDisconnect ();  
+            return -1;   
+        }
+
+        memset(&OlSetData,0x00,sizeof(OlSetData));
+    }
+    fclose(fFile);
+    rc = DbsCommit ();
+    if (rc){
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,
+                "DbsCommit error: [%d]",rc);
+        DbsDisconnect();
+        return -1;
+    }
+    DbsDisconnect(); 
+    return 0;
+}
+
+int ClnDtlData( char *sDay )
+{
+    int rc;
+    char pSql[521];
+    char lastDate[9];
+    int n;
+    bth_host_txn_susps_def BTH_HOST_TXN__SUSPS_tmp;
+
+    memset(lastDate,0,sizeof(lastDate));
+    GetLastDate(sDay ,lastDate); 
+
+    /* 删除当天数据 */
+    memset(pSql,0,sizeof(pSql));
+    sprintf(pSql,"delete  from TBL_ONLINE_INFILE where date_settlmt='%s'" , sDay);
+    HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "delete sql =[%s]",pSql);
+    rc = DbsRunSQL(pSql);   
+    if(rc && rc != DBS_NOTFOUND)
+    {   
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "delete BTH_HOST_TXN %s",DbsError());
+
+        return -1;
+    }
+
+    rc = DbsCommit ();
+    if (rc)
+    {
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsCommit error: [%d]",rc);
+        return -1;
+    }
+    return 0;
+}
+
+int main(int argc, char **argv) 
+{
+
+    int rc;
+    int reDef=0;
+
+    memset(gsLogFile,0x00,sizeof(gsLogFile));
+    strcpy(gsLogFile,"LoadOnlineFile.log");
+
+    HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "LoadOnlineSettleFile begin. ");
+
+    if(argc < 4)
+    {
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "error argc=[%d] ",argc);
+        return -1;
+
+    }
+
+    rc = DbsConnect();
+    if (rc) {
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "dbsconnect error %d",rc);
+        return -1;
+    }
+
+    /* 清理数据 */
+    rc = ClnDtlData(argv[1]);
+    if (rc) 
+    {
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "delete  error %d",rc);
+        DbsDisconnect();
+        return -1;
+    }
+
+
+    if(load_online_settle_file(argv[1]))
+    {
+        reDef= -2;
+    }
+
+    DbsDisconnect( );        
+    HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, " LoadOnlineSettleFile is ok! ");
+    return reDef;
+
+}

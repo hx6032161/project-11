@@ -1,0 +1,496 @@
+/*
+ *  Copyright 2008, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  $Id: LoadTxn.c,v 1.3 2009/12/11 09:51:28 lixinhe Exp $
+ *
+ *  功能: 主函数
+ *
+ *  Edit History:
+ *
+ */
+static char _loadTxn_c_ID[]="$Id: LoadTxn.c,v 1.3 2009/12/11 09:51:28 lixinhe Exp $";
+
+/*****************************************************************************/
+#include <glob.h>
+#include <unistd.h>
+#include "HtLog.h"
+#include "Common.h"
+#include "Convert.h"
+
+
+int   gnInsIdCdFlag = 0;
+int   gnFileTypeFlag = 0;
+char  gsSqlBuf[1024];
+char  gsBatId[6];
+char  gsMatchStr[30 + 1];
+long  glCommitPoint;
+
+void usage(int argc, char **argv)
+{
+    printf("Usage: %s stlm_date bat_id ins_id_cd file_type\n\t"
+           "stlm_date: YYYYMMDD\n\t"
+           "type: *:ALL|1:ACQ_COM|2:ISS_COM|3:ACQ_ERR|4:ISS_ERR\n\t"
+           "5:ACQ_FCP|6:ISS_FCP|7:ACQ_TFL|8:ISS_TFL|9:TXN|A:LFEE_ACQ|B:LFEE_ISS\n",
+            argv[0]);
+}
+
+
+
+int In_Dbt_ERR(bth_gc_txn_succ_def *pBTH_GC_TXN_SUCC ,bth_host_txn_def *pBTH_HOST_TXN )
+{     
+    int rc;
+    bth_dtl_err_gc_def  BTH_DTL_ERR_GC_tmp;
+    strcpy(BTH_DTL_ERR_GC_tmp.manage_inst," ");
+    memset (&BTH_DTL_ERR_GC_tmp,0,sizeof(BTH_DTL_ERR_GC_tmp));
+    strncpy(BTH_DTL_ERR_GC_tmp.date_settlmt,pBTH_GC_TXN_SUCC->date_settlmt_8,8);
+    strncpy(BTH_DTL_ERR_GC_tmp.acq_txn_num,pBTH_GC_TXN_SUCC->txn_num,4);
+    strncpy(BTH_DTL_ERR_GC_tmp.acq_txn_ssn,pBTH_GC_TXN_SUCC->sys_seq_num,6);
+    strncpy(BTH_DTL_ERR_GC_tmp.acq_txn_status,pBTH_GC_TXN_SUCC->trans_state,1);
+    strncpy(BTH_DTL_ERR_GC_tmp.acq_pan,pBTH_GC_TXN_SUCC->pan,19);
+    strncpy(BTH_DTL_ERR_GC_tmp.acq_amt_trans,pBTH_GC_TXN_SUCC->amt_trans,12);
+    strncpy(BTH_DTL_ERR_GC_tmp.acq_atm_stlm,pBTH_GC_TXN_SUCC->amt_settlmt,12);
+    strncpy(BTH_DTL_ERR_GC_tmp.acq_mcht_fee,pBTH_GC_TXN_SUCC->mcht_fee,12);
+    strncpy(BTH_DTL_ERR_GC_tmp.acq_mcht_cd,pBTH_GC_TXN_SUCC->card_accp_id,15);//收单系统商户号--受卡方标识码
+    strcpy(BTH_DTL_ERR_GC_tmp.acq_term_id," ");
+    strncpy(BTH_DTL_ERR_GC_tmp.acq_txn_date ,pBTH_HOST_TXN->txn_date ,8);//收单系统交易日期
+    strncpy(BTH_DTL_ERR_GC_tmp.acq_txn_time ,pBTH_HOST_TXN->txn_time ,6);
+    strcpy(BTH_DTL_ERR_GC_tmp.out_sys ,"HOST" );//不确定
+    strncpy(BTH_DTL_ERR_GC_tmp.out_stlm_date ,pBTH_HOST_TXN->date_settlmt,8);//???
+    strncpy(BTH_DTL_ERR_GC_tmp.trans_date_time ,pBTH_GC_TXN_SUCC->trans_date_time,10);
+    
+    strncpy(BTH_DTL_ERR_GC_tmp.out_ssn ,pBTH_HOST_TXN->host_ssn,12);
+    strncpy(BTH_DTL_ERR_GC_tmp.acq_inst_id_code ,pBTH_GC_TXN_SUCC->acq_inst_id_code,11); 
+    strncpy(BTH_DTL_ERR_GC_tmp.fwd_inst_id_code ,pBTH_GC_TXN_SUCC->fwd_inst_id_code,11); 
+    strncpy(BTH_DTL_ERR_GC_tmp.term_ssn ,pBTH_GC_TXN_SUCC->term_ssn,12); 
+    strncpy(BTH_DTL_ERR_GC_tmp.inst_date,pBTH_GC_TXN_SUCC->inst_date,8);
+    strncpy(BTH_DTL_ERR_GC_tmp.inst_time,pBTH_GC_TXN_SUCC->inst_time,6);
+    strncpy(BTH_DTL_ERR_GC_tmp.host_ssn,pBTH_GC_TXN_SUCC->host_ssn,12);
+    strncpy(BTH_DTL_ERR_GC_tmp.host_date,pBTH_GC_TXN_SUCC->host_date,8);
+    //strncpy(BTH_DTL_ERR_GC_tmp.gc_txn_num,pBTH_GC_TXN_SUCC->txn_num,4);/*银联转换交易代码*/
+    strcpy(BTH_DTL_ERR_GC_tmp.gc_txn_num," ");
+    strncpy(BTH_DTL_ERR_GC_tmp.txn_num,pBTH_HOST_TXN->txn_num,4);//
+    strncpy(BTH_DTL_ERR_GC_tmp.msg_type,pBTH_GC_TXN_SUCC->msg_type,4);
+    strncpy(BTH_DTL_ERR_GC_tmp.processing_code,pBTH_GC_TXN_SUCC->processing_code,6);
+    strncpy(BTH_DTL_ERR_GC_tmp.mchnt_type ,pBTH_GC_TXN_SUCC->mchnt_type,4);
+    strncpy(BTH_DTL_ERR_GC_tmp.pos_cond_code,pBTH_GC_TXN_SUCC->pos_cond_code,2);
+    strncpy(BTH_DTL_ERR_GC_tmp.channel_num,pBTH_GC_TXN_SUCC->channel_num,2);
+    strncpy(BTH_DTL_ERR_GC_tmp.pan,pBTH_GC_TXN_SUCC->pan,19);
+    strncpy(BTH_DTL_ERR_GC_tmp.amt_trans,pBTH_GC_TXN_SUCC->amt_trans,12);
+    strncpy(BTH_DTL_ERR_GC_tmp.authr_id_resp,pBTH_GC_TXN_SUCC->authr_id_resp,6);
+    strncpy(BTH_DTL_ERR_GC_tmp.resp_code,pBTH_GC_TXN_SUCC->resp_code,2);
+    //strncpy(BTH_DTL_ERR_GC_tmp.host_recode,pBTH_HOST_TXN->host_recode,7);/*待确定*/
+    strcpy(BTH_DTL_ERR_GC_tmp.host_recode," ");
+    strncpy(BTH_DTL_ERR_GC_tmp.fee_credit,pBTH_GC_TXN_SUCC->fee_credit,12);
+    strncpy(BTH_DTL_ERR_GC_tmp.fee_debit,pBTH_GC_TXN_SUCC->fee_debit,12);
+    //strncpy(BTH_DTL_ERR_GC_tmp.fee_cdhr,pBTH_GC_TXN_SUCC->,12);/*待确定*/
+    strcpy(BTH_DTL_ERR_GC_tmp.fee_cdhr," ");
+    //strncpy(BTH_DTL_ERR_GC_tmp.fee_inst,pBTH_GC_TXN_SUCC->,12);/*待确定*/
+    strcpy(BTH_DTL_ERR_GC_tmp.fee_inst,"");
+    //strncpy(BTH_DTL_ERR_GC_tmp.fee_logo,pBTH_GC_TXN_SUCC->,12);/*待确定*/
+    strcpy(BTH_DTL_ERR_GC_tmp.fee_logo," ");
+    strncpy(BTH_DTL_ERR_GC_tmp.pos_entry_mode,pBTH_GC_TXN_SUCC->pos_entry_mode,3);
+    strncpy(BTH_DTL_ERR_GC_tmp.card_accp_term_id,pBTH_GC_TXN_SUCC->card_accp_term_id,8);
+    strncpy(BTH_DTL_ERR_GC_tmp.card_accp_id,pBTH_GC_TXN_SUCC->card_accp_id,15);
+    strncpy(BTH_DTL_ERR_GC_tmp.card_accp_addr,pBTH_GC_TXN_SUCC->card_accp_name,40);
+    //strcpy(BTH_DTL_ERR_GC_tmp.card_accp_addr," ");
+    strncpy(BTH_DTL_ERR_GC_tmp.retrivl_ref,pBTH_GC_TXN_SUCC->retrivl_ref,12);
+    strncpy(BTH_DTL_ERR_GC_tmp.rcvg_code,pBTH_GC_TXN_SUCC->rcvg_code,11);
+    strncpy(BTH_DTL_ERR_GC_tmp.issuer_code,pBTH_HOST_TXN->iss_brh_no,11);
+    //strncpy(BTH_DTL_ERR_GC_tmp.deal_flg,pBTH_GC_TXN_SUCC->,2);/*待确定 交易标识是否对应交易渠道*/
+    strcpy(BTH_DTL_ERR_GC_tmp.deal_flg," ");
+    //strncpy(BTH_DTL_ERR_GC_tmp.tran_flg,pBTH_GC_TXN_SUCC->,1);/*待确定*/
+    strcpy(BTH_DTL_ERR_GC_tmp.tran_flg," ");
+    strncpy(BTH_DTL_ERR_GC_tmp.code_xfer_o,pBTH_GC_TXN_SUCC->rcvg_code,11);/*待确定（转出机构标识码？= 接收机构标识码）*/
+    //strncpy(BTH_DTL_ERR_GC_tmp.pan_xfer_o,pBTH_GC_TXN_SUCC->,19);/*待确定*/
+    strcpy(BTH_DTL_ERR_GC_tmp.pan_xfer_o," ");
+    strncpy(BTH_DTL_ERR_GC_tmp.code_xfer_i,pBTH_GC_TXN_SUCC->rcvg_code,11);/*待确定(转入机构表示码？=接收机构标识码)*/
+    strcpy(BTH_DTL_ERR_GC_tmp.pan_xfer_i," ");/*待确定*/
+    strncpy(BTH_DTL_ERR_GC_tmp.currcy_code_trans,pBTH_GC_TXN_SUCC->currcy_code_trans,3);
+    strncpy(BTH_DTL_ERR_GC_tmp.currcy_code_stlm,pBTH_GC_TXN_SUCC->currcy_code_stlm,3);
+    strncpy(BTH_DTL_ERR_GC_tmp.amt_settlmt,pBTH_GC_TXN_SUCC->amt_settlmt,12);         
+    strncpy(BTH_DTL_ERR_GC_tmp.mcht_fee,pBTH_GC_TXN_SUCC->mcht_fee,12); 
+    strncpy(BTH_DTL_ERR_GC_tmp.conv_rate_stlm,pBTH_GC_TXN_SUCC->conv_rate_stlm,8);
+    strncpy(BTH_DTL_ERR_GC_tmp.date_conv,pBTH_GC_TXN_SUCC->date_conv,8);
+    strncpy(BTH_DTL_ERR_GC_tmp.flag_domestic,pBTH_GC_TXN_SUCC->flag_domestic,1); 
+    strcpy(BTH_DTL_ERR_GC_tmp.flag_city," ");/*待确定*/
+    strcpy(BTH_DTL_ERR_GC_tmp.area_code," ");/*待确定*/
+    strcpy(BTH_DTL_ERR_GC_tmp.inst_no," ");/*待确定*/
+    strcpy(BTH_DTL_ERR_GC_tmp.bank_flag," ");/*待确定*/
+    strcpy(BTH_DTL_ERR_GC_tmp.acqu_ins_id_cd," ");/*待确定*/
+    strcpy(BTH_DTL_ERR_GC_tmp.cup_ins_id," ");/*待确定*/
+    strcpy(BTH_DTL_ERR_GC_tmp.bus_date," ");/*待确定*/
+    strncpy(BTH_DTL_ERR_GC_tmp.stlm_flag,pBTH_GC_TXN_SUCC->stlm_flag,1);
+    strncpy(BTH_DTL_ERR_GC_tmp.t_0_flag,pBTH_GC_TXN_SUCC->t_0_flag,1);
+    strncpy(BTH_DTL_ERR_GC_tmp.txn_acq_type,pBTH_GC_TXN_SUCC->txn_acq_type,1);
+    strncpy(BTH_DTL_ERR_GC_tmp.lst_upd_tlr,pBTH_GC_TXN_SUCC->lst_upd_tlr,11);
+    strncpy(BTH_DTL_ERR_GC_tmp.create_time,pBTH_GC_TXN_SUCC->create_time,14);
+    strncpy(BTH_DTL_ERR_GC_tmp.lst_upd_time,pBTH_GC_TXN_SUCC->lst_upd_time,14);
+    strcpy(BTH_DTL_ERR_GC_tmp.err_proc_cd," ");/*待确定*/        
+      rc = DbsBTH_DTL_ERR_GC(DBS_INSERT,&BTH_DTL_ERR_GC_tmp);
+      if(rc){
+           HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DBS_INSERT DbsBTH_DTL_ERR_GC %s",DbsError()); 
+           DbsRollback ();  
+           return rc; 
+       }
+    return 0; 
+}
+
+int In_Dbt_OK(bth_gc_txn_succ_def *pBTH_GC_TXN_SUCC ,bth_host_txn_def *pBTH_HOST_TXN)
+{
+    int rc;
+    bth_dtl_bdt_def bth_dtl_bdt_tmp;
+    memset(&bth_dtl_bdt_tmp,0,sizeof(bth_dtl_bdt_tmp));
+    strcpy(bth_dtl_bdt_tmp.manage_inst," ");
+    strncpy(bth_dtl_bdt_tmp.date_settlmt,pBTH_GC_TXN_SUCC->date_settlmt_8,8);
+    strncpy(bth_dtl_bdt_tmp.trans_date_time,pBTH_GC_TXN_SUCC->trans_date_time,10);
+    strncpy(bth_dtl_bdt_tmp.cup_ssn,pBTH_GC_TXN_SUCC->cup_ssn,6);
+    strncpy(bth_dtl_bdt_tmp.acq_inst_id_code,pBTH_GC_TXN_SUCC->acq_inst_id_code,11);
+    strncpy(bth_dtl_bdt_tmp.fwd_inst_id_code,pBTH_GC_TXN_SUCC->fwd_inst_id_code,11);
+    strncpy(bth_dtl_bdt_tmp.sys_seq_num,pBTH_GC_TXN_SUCC->sys_seq_num,6);
+    strncpy(bth_dtl_bdt_tmp.term_ssn,pBTH_GC_TXN_SUCC->term_ssn,12);
+    strncpy(bth_dtl_bdt_tmp.inst_date,pBTH_GC_TXN_SUCC->inst_date,8);
+    strncpy(bth_dtl_bdt_tmp.inst_time,pBTH_GC_TXN_SUCC->inst_time,6);
+    strncpy(bth_dtl_bdt_tmp.host_ssn,pBTH_GC_TXN_SUCC->host_ssn,12);
+    strncpy(bth_dtl_bdt_tmp.host_date,pBTH_GC_TXN_SUCC->host_date,8);
+    strcpy(bth_dtl_bdt_tmp.gc_txn_num," ");//不确定
+    strncpy(bth_dtl_bdt_tmp.txn_num,pBTH_GC_TXN_SUCC->txn_num,4);
+    strncpy(bth_dtl_bdt_tmp.msg_type,pBTH_GC_TXN_SUCC->msg_type,4);
+    strncpy(bth_dtl_bdt_tmp.processing_code,pBTH_GC_TXN_SUCC->processing_code,6);
+    strncpy(bth_dtl_bdt_tmp.mchnt_type,pBTH_GC_TXN_SUCC->mchnt_type,4);
+    strncpy(bth_dtl_bdt_tmp.pos_cond_code,pBTH_GC_TXN_SUCC->pos_cond_code,2);
+    strncpy(bth_dtl_bdt_tmp.channel_num,pBTH_GC_TXN_SUCC->channel_num,2);
+    strcpy(bth_dtl_bdt_tmp.orig_data_ssn," ");
+    strcpy(bth_dtl_bdt_tmp.orig_data_time," ");
+    strcpy(bth_dtl_bdt_tmp.orig_date_settlmt," ");
+    strcpy(bth_dtl_bdt_tmp.orig_term_ssn," ");
+    strcpy(bth_dtl_bdt_tmp.orig_cup_ssn, " ");
+    strcpy(bth_dtl_bdt_tmp.orig_host_date, " " );
+    strcpy(bth_dtl_bdt_tmp.orig_host_ssn," ");
+    strncpy(bth_dtl_bdt_tmp.pan,pBTH_GC_TXN_SUCC->pan,19);
+    strncpy(bth_dtl_bdt_tmp.amt_trans,pBTH_GC_TXN_SUCC->amt_trans,12);
+    strncpy(bth_dtl_bdt_tmp.authr_id_resp,pBTH_GC_TXN_SUCC->authr_id_resp,6);
+    strncpy(bth_dtl_bdt_tmp.resp_code,pBTH_GC_TXN_SUCC->resp_code,2);
+    strcpy(bth_dtl_bdt_tmp.host_recode," ");
+    strncpy(bth_dtl_bdt_tmp.fee_credit,pBTH_GC_TXN_SUCC->fee_credit,12);
+    strncpy(bth_dtl_bdt_tmp.fee_debit,pBTH_GC_TXN_SUCC->fee_debit,12);
+    strcpy(bth_dtl_bdt_tmp.fee_cdhr," ");
+    strcpy(bth_dtl_bdt_tmp.fee_logo," ");
+    strncpy(bth_dtl_bdt_tmp.pos_entry_mode,pBTH_GC_TXN_SUCC->pos_entry_mode,3);
+    strncpy(bth_dtl_bdt_tmp.card_accp_term_id,pBTH_GC_TXN_SUCC->card_accp_term_id,8);
+    strncpy(bth_dtl_bdt_tmp.card_accp_id,pBTH_GC_TXN_SUCC->card_accp_id,15);
+    strncpy(bth_dtl_bdt_tmp.card_accp_addr,pBTH_GC_TXN_SUCC->card_accp_name,40);
+    strcpy(bth_dtl_bdt_tmp.retrivl_ref," ");
+    strncpy(bth_dtl_bdt_tmp.rcvg_code,pBTH_GC_TXN_SUCC->rcvg_code,11);
+    strncpy(bth_dtl_bdt_tmp.issuer_code,pBTH_HOST_TXN->iss_brh_no,11);
+    strcpy(bth_dtl_bdt_tmp.deal_flg," ");
+    strcpy(bth_dtl_bdt_tmp.tran_flg," ");
+    strcpy(bth_dtl_bdt_tmp.code_xfer_o," ");
+    strcpy(bth_dtl_bdt_tmp.pan_xfer_o," ");
+    strcpy(bth_dtl_bdt_tmp.code_xfer_i," ");
+    strcpy(bth_dtl_bdt_tmp.pan_xfer_i," ");
+    strncpy(bth_dtl_bdt_tmp.currcy_code_trans,pBTH_GC_TXN_SUCC->currcy_code_trans,3);
+    strncpy(bth_dtl_bdt_tmp.currcy_code_stlm,pBTH_GC_TXN_SUCC->currcy_code_stlm,3);
+    strncpy(bth_dtl_bdt_tmp.amt_settlmt,pBTH_GC_TXN_SUCC->amt_settlmt,12);
+    strncpy(bth_dtl_bdt_tmp.mcht_fee,pBTH_GC_TXN_SUCC->mcht_fee,12);
+    strncpy(bth_dtl_bdt_tmp.conv_rate_stlm,pBTH_GC_TXN_SUCC->conv_rate_stlm,8);
+    strcpy(bth_dtl_bdt_tmp.date_conv," ");
+    strncpy(bth_dtl_bdt_tmp.flag_domestic,pBTH_GC_TXN_SUCC->flag_domestic,1);
+    strcpy(bth_dtl_bdt_tmp.flag_city," ");
+    strcpy(bth_dtl_bdt_tmp.area_code," ");
+    strcpy(bth_dtl_bdt_tmp.inst_no," ");
+    strcpy(bth_dtl_bdt_tmp.bank_flag," ");
+    strcpy(bth_dtl_bdt_tmp.acqu_ins_id_cd," ");
+    strcpy(bth_dtl_bdt_tmp.cup_ins_id," ");
+    strcpy(bth_dtl_bdt_tmp.bus_date," ");
+    strncpy(bth_dtl_bdt_tmp.t_0_flag,pBTH_GC_TXN_SUCC->t_0_flag,1);
+    strncpy(bth_dtl_bdt_tmp.txn_acq_type,pBTH_GC_TXN_SUCC->txn_acq_type,1);
+    strncpy(bth_dtl_bdt_tmp.stlm_flag,pBTH_HOST_TXN->stlm_flag,1);
+    strncpy(bth_dtl_bdt_tmp.lst_upd_tlr,pBTH_HOST_TXN->lst_upd_opr,11);
+    strncpy(bth_dtl_bdt_tmp.create_time,pBTH_HOST_TXN->create_time,14);
+    strncpy(bth_dtl_bdt_tmp.lst_upd_time,pBTH_HOST_TXN->lst_upd_time,14);
+    rc = DbsBTH_DTL_BDT(DBS_INSERT,&bth_dtl_bdt_tmp);
+      if(rc){
+           HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DBS_INSERT DbsBTH_DTL_ERR_GC %s",DbsError()); 
+           DbsRollback ();  
+           return rc; 
+       }
+    return 0; 
+}
+
+
+int ClnCupDtlData( char *sDay )
+{
+    int rc;
+    char pSql[521];
+    memset(pSql,0,sizeof(pSql));
+    sprintf(pSql,"delete  from BTH_DTL_ERR_GC where date_settlmt='%s'" , sDay);
+      HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "delete sql =[%s]",pSql);
+    
+    rc = DbsRunSQL(pSql);   
+    if(rc && rc != SQL_NOTFOUND)
+    {   
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "delete BTH_DTL_ERR_GC %s",DbsError());
+
+        return -1;
+    }
+    
+    memset(pSql,0,sizeof(pSql));
+    sprintf(pSql,"delete  from BTH_DTL_BDT where date_settlmt='%s' " , sDay);
+    HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "delete sql =[%s]",pSql);
+    rc = DbsRunSQL(pSql);   
+    if(rc && rc != SQL_NOTFOUND)
+    {
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "delete BTH_DTL_GC %s",DbsError());
+        return -1;
+    }
+    return 0;
+}
+
+int StlmBdb( char *sDay )
+{    
+    char sSql[512];
+    int rc=0;
+    bth_gc_txn_succ_def BTH_GC_TXN_SUCC_tmp;
+    bth_host_txn_def BTH_HOST_TXN_tmp;
+    
+    sprintf(sSql, "select * from BTH_GC_TXN_SUCC where DATE_SETTLMT_8='%s'\
+     and stlm_flag='%s' and t_0_flag='0' and txn_acq_type ='1'", sDay,STLM_FLG_NOCHK);  
+    HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "select BTH_GC_TXN_SUCC sql =[%s]",sSql);
+    
+    rc =OpenCursorBTH_GC_TXN_SUCC(sSql);
+    if(rc)
+    {
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "OpenCursorBTH_GC_TXN_SUCC %s",DbsError());
+        DbsDisconnect ();  
+        return rc;
+    }
+    
+    while(1)
+    {
+        memset(&BTH_GC_TXN_SUCC_tmp,0x00,sizeof(BTH_GC_TXN_SUCC_tmp));
+        rc = FetchCursorBTH_GC_TXN_SUCC(&BTH_GC_TXN_SUCC_tmp);//从核心流水表中取出记录
+        if (rc == SQL_NOTFOUND) 
+        {
+            HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "Fetch BTH_GC_TXN_SUCC %s",DbsError());
+            break;
+        }
+        else if(rc){
+            HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "Fetch BTH_GC_TXN_SUCC %s",DbsError());
+            CloseCursorBTH_GC_TXN_SUCC(&BTH_GC_TXN_SUCC_tmp);
+            //DbsRollback ();  
+            return rc;
+        }
+        memset(&BTH_HOST_TXN_tmp,0x00,sizeof(BTH_HOST_TXN_tmp));  
+        CommonRTrim(BTH_GC_TXN_SUCC_tmp.host_ssn);    
+        CommonRTrim(BTH_GC_TXN_SUCC_tmp.host_date);
+        
+        strncpy(BTH_HOST_TXN_tmp.date_settlmt,sDay,8);
+        strncpy(BTH_HOST_TXN_tmp.host_ssn,BTH_GC_TXN_SUCC_tmp.host_ssn,12);
+        strncpy(BTH_HOST_TXN_tmp.host_date,BTH_GC_TXN_SUCC_tmp.host_date,8);
+        rc = DbsBTH_HOST_TXN(DBS_SELECT, &BTH_HOST_TXN_tmp);
+        
+       //printf("BTH_GC_TXN_SUCC_tmp.host_ssn=[%s]",BTH_GC_TXN_SUCC_tmp.host_ssn);
+       //printf("BTH_GC_TXN_SUCC_tmp.host_date=[%s] \n",BTH_GC_TXN_SUCC_tmp.host_date);
+        if(rc == SQL_NOTFOUND){//pos有host没有
+            /*错误信息插入不平表*/
+            //strcpy(BTH_GC_TXN_SUCC_tmp.stlm_flag, STLM_HOST_FLG_POSP);
+            strcpy(BTH_GC_TXN_SUCC_tmp.stlm_flag, STLM_HOST_FLG_POSP);//4
+            rc=In_Dbt_ERR(&BTH_GC_TXN_SUCC_tmp,&BTH_HOST_TXN_tmp);
+            if(rc){
+                HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "In_Dbt_ERR DBS_INSERT ERROR:%s",DbsError());
+                rc = CloseCursorBTH_GC_TXN_SUCC();
+                //DbsRollback ();
+                return rc;
+            }
+            
+            //更新前置流水对账标识
+            rc = DbsBTH_GC_TXN_SUCC(DBS_UPDATE ,&BTH_GC_TXN_SUCC_tmp);
+            if (rc) {
+                HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DBS_UPDATE DBS_BTH_GC_TXN_SUCC %s",DbsError());
+                CloseCursorBTH_GC_TXN_SUCC();
+                //DbsRollback ();
+                return rc;
+            }
+        }
+        else if (rc == 0){//两者都有，比较金额
+            /*金额对平*/
+            
+            CommonRTrim(BTH_GC_TXN_SUCC_tmp.amt_trans);
+            CommonRTrim(BTH_HOST_TXN_tmp.trans_amt);    
+            CommonRTrim(BTH_GC_TXN_SUCC_tmp.amt_trans_fee);    
+            CommonRTrim(BTH_HOST_TXN_tmp.trans_fee);    
+          //  //printf("aaaa.host_ssn=[%s]\n",BTH_GC_TXN_SUCC_tmp.host_ssn);
+            if(strcmp(BTH_GC_TXN_SUCC_tmp.amt_trans ,BTH_HOST_TXN_tmp.trans_amt)==0 && strcmp(BTH_GC_TXN_SUCC_tmp.amt_trans_fee, BTH_HOST_TXN_tmp.trans_fee)==0){
+               // strcpy(BTH_GC_TXN_SUCC_tmp.stlm_flag, "0");
+                //strcpy(BTH_HOST_TXN_tmp.stlm_flag, "0");STLM_FLG_OK
+                strcpy(BTH_GC_TXN_SUCC_tmp.stlm_flag, STLM_FLG_OK);
+                strcpy(BTH_HOST_TXN_tmp.stlm_flag, STLM_FLG_OK);
+                //printf("bbbb.host_ssn=[%s]\n",BTH_GC_TXN_SUCC_tmp.host_ssn);
+                rc=In_Dbt_OK(&BTH_GC_TXN_SUCC_tmp, &BTH_HOST_TXN_tmp);
+                if(rc){
+                    HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "In_Dbt_ERR DBS_INSERT ERROR:%s",DbsError());
+                    rc = CloseCursorBTH_GC_TXN_SUCC();
+                    //DbsRollback ();
+                    return rc;
+                }
+            }
+            else {/*金额不平*/
+                strcpy(BTH_GC_TXN_SUCC_tmp.stlm_flag, STLM_HOST_FLG_DISTRUST);
+                strcpy(BTH_HOST_TXN_tmp.stlm_flag, STLM_HOST_FLG_DISTRUST);
+                /*金额不平 插入不平表*/
+                rc=In_Dbt_ERR(&BTH_GC_TXN_SUCC_tmp, &BTH_HOST_TXN_tmp);
+                if(rc){
+                    HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "In_Dbt_ERR DBS_INSERT ERROR:%s",DbsError());
+                    rc = CloseCursorBTH_GC_TXN_SUCC();
+                    //DbsRollback ();
+                    return rc;
+                }
+            }
+            /*更新主机流水对账标识*/
+            rc = DbsBTH_HOST_TXN(DBS_UPDATE, &BTH_HOST_TXN_tmp);
+            if (rc) {
+                HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DBS_UPDATE DbsBTH_HOST_TXN %s",DbsError());
+                rc = CloseCursorBTH_GC_TXN_SUCC();
+                //DbsRollback ();
+                return rc;
+            }
+            //更新前置流水对账标识
+            rc = DbsBTH_GC_TXN_SUCC(DBS_UPDATE ,&BTH_GC_TXN_SUCC_tmp);
+            if (rc) {
+                HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DBS_UPDATE DBS_BTH_GC_TXN_SUCC %s",DbsError());
+                CloseCursorBTH_GC_TXN_SUCC();
+                //DbsRollback ();
+                return rc;
+            }
+        }
+        else {
+            HtLog(gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__, "DbsBRH_HOST_TXN_DBS_SELECT error:%s", DbsError());
+            rc = CloseCursorBTH_GC_TXN_SUCC();
+            //DbsRollBack();
+            return rc;
+        }
+    }
+       /* //更新前置流水对账标识
+        strcpy(BTH_GC_TXN_SUCC_tmp.stlm_flag, "9");
+        rc = DbsBTH_GC_TXN_SUCC(DBS_UPDATE ,&BTH_GC_TXN_SUCC_tmp);
+        if (rc) {
+            HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "DBS_UPDATE DBS_BTH_GC_TXN_SUCC %s",DbsError());
+            CloseCursorBTH_GC_TXN_SUCC();
+            //DbsRollback ();
+            return rc;
+        }*/
+        /*if (nTotalNum%1000 == 0) {
+            DbsCommit();
+        }*/
+        //DbsCommit();
+        CloseCursorBTH_GC_TXN_SUCC();
+        //host有pos没有的情况
+        memset(sSql, 0x00, sizeof(sSql));
+        sprintf(sSql, "select * from BTH_HOST_TXN where date_settlmt = '%s' and STLM_FLAG='%s'", sDay,STLM_FLG_NOCHK);
+        rc = OpenCursorBTH_HOST_TXN(sSql);
+        if (rc) {
+            HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "OpenCursorBTH_HOST_TXN error:%s", DbsError());
+            return rc;
+        }
+        
+        while (1)
+        {
+              memset(&BTH_HOST_TXN_tmp, 0x00, sizeof(BTH_HOST_TXN_tmp));
+              rc = FetchCursorBTH_HOST_TXN(&BTH_HOST_TXN_tmp);
+              if (rc == SQL_NOTFOUND) {
+                  HtLog( gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,__LINE__, "FetchCursorBTH_HOST_TXN not Found:%s",DbsError());
+                  break;
+              }
+              else if (rc) {
+                  HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "FetchCursorBTH_HOST_TXN error:%s", DbsError());
+                  rc = CloseCursorBTH_HOST_TXN();
+                  //DbsRollBack();
+                  return rc;
+              }
+              
+              strcpy(BTH_HOST_TXN_tmp.stlm_flag, STLM_HOST_FLG_HOST);
+              strcpy(BTH_GC_TXN_SUCC_tmp.stlm_flag, STLM_HOST_FLG_HOST);
+              strcpy(BTH_GC_TXN_SUCC_tmp.date_settlmt_8 ,BTH_HOST_TXN_tmp.date_settlmt);
+              strcpy(BTH_GC_TXN_SUCC_tmp.trans_date_time ," ");
+              strcpy(BTH_GC_TXN_SUCC_tmp.acq_inst_id_code ," "); 
+              strcpy(BTH_GC_TXN_SUCC_tmp.fwd_inst_id_code ," "); 
+              strcpy(BTH_GC_TXN_SUCC_tmp.processing_code," ");
+              
+              
+              rc =In_Dbt_ERR(&BTH_GC_TXN_SUCC_tmp, &BTH_HOST_TXN_tmp);
+              if(rc){
+                  HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "In_Dbt_ERR DBS_INSERT ERROR:%s",DbsError());
+                  rc = CloseCursorBTH_GC_TXN_SUCC();
+                  //DbsRollback ();
+                  return rc;
+              }
+              /*更新主机流水对账标识*/
+              rc = DbsBTH_HOST_TXN(DBS_UPDATE, &BTH_HOST_TXN_tmp);
+              if (rc) {
+                  HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DBS_UPDATE DBS_BTH_HOST_TXN %s",DbsError());
+                  rc = CloseCursorBTH_GC_TXN_SUCC();
+                  //DbsRollback ();
+                  return rc;
+              }
+        }
+        CloseCursorBTH_HOST_TXN();
+        DbsCommit();
+    
+}
+
+
+
+int main(int argc, char **argv) 
+{
+    int iRet, ch;
+      
+    int rc;
+    char sDay[9];
+    char sSql[2001];
+  
+    memset(sSql, 0x00, sizeof(sSql));
+    memset(gsLogFile,0x00,sizeof(gsLogFile));
+    strcpy(gsLogFile,"StlmBdb.log");
+    printf("begin\n");
+    memset(sDay, 0x00, sizeof(sDay));
+    if( argc >=2) 
+    {
+        memcpy( sDay, argv[1], 8);
+    } 
+    else 
+    {
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "lose date parameters");
+        return -1;
+    }
+
+    rc = DbsConnect();
+    if (rc) {
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "dbsconnect error %d",rc);
+        return -1;
+    }
+    /* 清理数据 */
+    rc = ClnCupDtlData(sDay);
+    if (rc) 
+    {
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "delete  error %d",rc);
+        DbsDisconnect();
+        return -1;
+    }
+    rc = StlmBdb(sDay);
+    if (rc) 
+    {
+        HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "Stlm error %d",rc);
+        DbsDisconnect();
+        return -1;
+    }
+
+    printf("end \n");
+ 
+} 

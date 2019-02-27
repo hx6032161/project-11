@@ -1,0 +1,48 @@
+/*
+ *  Copyright 2006, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  function:db.h
+ *
+ *  Edit History:
+ *
+ *     2011/07/07 -gendb
+ */
+
+#ifndef _BTH_HOST_TXN_DEF_H
+#define _BTH_HOST_TXN_DEF_H
+/*   Default values for table bth_host_txn.    */
+#define	date_settlmt_DEF	"        "
+#define	key_host_DEF	"                                  "
+#define	sys_seq_num_DEF	"      "
+#define	term_ssn_DEF	"            "
+#define	txn_date_DEF	"        "
+#define	txn_time_DEF	"      "
+#define	host_ssn_DEF	"            "
+#define	host_date_DEF	"        "
+#define	txn_num_DEF	"    "
+#define	txn_chnl_DEF	"   "
+#define	card_no_DEF	"                   "
+#define	acct_no_DEF	"                                "
+#define	acct_tp_DEF	" "
+#define	trans_amt_DEF	"            "
+#define	trans_fee_DEF	"            "
+#define	curr_tp_DEF	"    "
+#define	acq_ins_id_cd_DEF	"           "
+#define	iss_brh_no_DEF	"           "
+#define	tlr_id_DEF	"           "
+#define	c_d_flag_DEF	" "
+#define	fee_c_d_flag_DEF	" "
+#define	trans_status_DEF	" "
+#define	stlm_flag_DEF	" "
+#define	lst_upd_opr_DEF	"           "
+#define	create_time_DEF	"              "
+#define	lst_upd_time_DEF	"              "
+
+#endif

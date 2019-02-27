@@ -1,0 +1,28 @@
+include $(HOME)/mak/platform.mak
+include $(HOME)/mak/database.mak
+include $(HOME)/mak/tuxedo.mak
+
+PRGOBJS = \
+        cltMain.o \
+
+PRGTARG = \
+	DataSimu
+
+
+PRGLIBS = -lsvrcom -lpubcom -ldbauto -ldbuser -ldblink $(DBLIBS)
+
+debug all: debugexec
+release: releaseexec
+clean:clean
+
+# DO NOT modify any code below!!!
+
+releasedynamic debugdynamic releasestatic debugstatic releaseexec debugexec tuxdebugexec tuxreleaseexec tuxclidebug tuxclirelease clean:
+	@TARGET="$(PRGTARG)"; \
+	OBJS="$(PRGOBJS)"; \
+	LIBS="$(PRGLIBS)"; \
+	SERS="$(PRGSERS)"; \
+	DEFS="$(PRGDEFS)"; \
+	SVCS="$(SVCS)"; \
+	export TARGET OBJS LIBS DEFS SERS SVCS; \
+	make -f $(EPRHOME)/mak/mkstand.mak $@

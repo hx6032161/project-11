@@ -1,0 +1,59 @@
+/*
+ *  Copyright 2008, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  $Id: LoadOlStlmFileAssign.c,v 1.2 2009/02/12 13:21:26 dmliu Exp $
+ *
+ *  功能: 数据清理，子任务参数配置
+ *
+ *  Edit History:
+ *       2009/01/12 --created by dmliu 
+ */
+static char _LoadOlStlmFileAssign_c_ID[]="$Id: LoadOlStlmFileAssign.c,v 1.2 2009/02/12 13:21:26 dmliu Exp $";
+#include "Rpt.h"
+
+int   LoadCupIcomFileTask(char *pStlmDate, char *pchBatId, int iChdCount)
+{
+    int  iRet;
+    tbl_bat_task_def tTblBatTask;
+
+    sprintf(gsLogFile, "%s", "BatMain.log");
+
+    DbsTBL_BAT_TASK(DBS_INIT, &tTblBatTask);
+    memcpy(tTblBatTask.date_settlmt, pStlmDate, sizeof(tTblBatTask.date_settlmt) - 1);
+    memcpy(tTblBatTask.bat_id, pchBatId, sizeof(tTblBatTask.bat_id) - 1); 
+    memcpy(tTblBatTask.matchstr, "*", 1);
+    CommonRTrim(tTblBatTask.matchstr);
+    tTblBatTask.task_state[0] = TASK_RUN_STA_PRE;
+	tTblBatTask.rec_opr_id[0] = 'I';
+	memcpy(tTblBatTask.rec_upd_opr, "bat", 3);
+	CommonGetCurrentTime(tTblBatTask.rec_crt_ts);
+	CommonGetCurrentTime(tTblBatTask.rec_upd_ts);
+  
+    DbsBegin();
+ 
+    iRet = DbsTBL_BAT_TASK(DBS_INSERT, &tTblBatTask);
+    if (iRet) 
+	{
+        DbsRollback();
+        return iRet;
+    }
+	HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "bat_id=[%s]", pchBatId);
+    
+    /*edit by zhaoh 20121224*/
+    iRet = DbsCommit();
+    if (iRet)
+	{
+        HtLog(gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__,
+             "DbsCommit error: [%d]", iRet);
+        return -1;
+    }
+
+    return 0;
+}        

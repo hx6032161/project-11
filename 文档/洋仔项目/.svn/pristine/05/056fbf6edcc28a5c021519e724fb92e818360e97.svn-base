@@ -1,0 +1,461 @@
+/*
+ *  Copyright 2008, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  $Id: trsFileSvr.c,v 1.3 2008/10/07 06:57:00 mcpay Exp $
+ *
+ *  功能：这个程序负责监控接受服务
+ *
+ *  Edit History:
+ *
+ *    2008/07/10  saige init:
+ */
+#include "bfTrans.h"
+#include "ftpclient.h"
+#include "dlt/monData.h"
+
+int  nChdNum, gnChdNum;
+int  nRetryNum, nWaitTime;
+int  nPort;
+void Wait();
+void SignalHandle(int);
+int  HandleFileSvr(int);
+
+int main(int argc, char *argv[])
+{
+    int    code ;
+    int    nPid, nSocket, nInitSocket;
+    char   sClientAddr[20 + 1];
+    struct sockaddr_in Client;
+    unsigned int  nSockAddLen = sizeof(Client);
+    int    lFileLen;
+
+    sigset(SIGCHLD, SIG_IGN);
+
+    strcpy(g_szLogFileName, "MonSvr");
+    strcpy(gsTxnCode, "MonSvr");
+
+
+    sigset(SIGCHLD, SignalHandle);
+    sigset(SIGUSR1, SignalHandle);
+    sigset(SIGTERM, SignalHandle);
+
+    /* 初始化数据 */
+    monInit();
+
+    code = CreateSocket(nPort, nRetryNum, nWaitTime, &nInitSocket);
+    if (code != 0) {
+        OnLog(TRACE_ERROR,"CreateSocket error: [%d], [%s]", code, strerror(errno));
+        exit(1);
+    }
+
+    sigset(SIGCHLD, Wait);
+    nChdNum = 0;
+    while (1) {
+
+        OnLog(TRACE_ERROR,"accept nChdNum: %d, gnChdNum: %d, waiting.....................", nChdNum, gnChdNum);
+        while (nChdNum >= gnChdNum) sleep(1);
+        code = AcceptSocket(nInitSocket, &Client, nWaitTime, &nSocket);
+        if (code != 0) {
+            OnLog(TRACE_ERROR,"AcceptSocket error: [%d]", code);
+        }
+
+        strcpy(sClientAddr, (char *)inet_ntoa(Client.sin_addr));
+        OnLog(TRACE_ERROR,"Client IP: [%s], nSocket: [%d]", sClientAddr, nSocket);
+
+        nPid = fork();
+        if (nPid < 0) {
+            OnLog(TRACE_ERROR,"fork error: [%s]", strerror(errno));
+            close(nSocket);
+            continue;
+        }else if(nPid == 0) {
+            HandleFileSvr(nSocket);
+            close(nSocket);
+            exit(0);
+        }
+        nChdNum++;
+        close(nSocket);
+    }
+
+    OnLog(TRACE_ERROR,"exit(0)...");
+    exit(0);
+}
+
+int HandleFileSvr(int nSocket)
+{
+    int             code, nLen;
+    IPCBfTransHead  ipcBfTransHead,ipcBfTransHead1;
+    char    sFileName[N_FILE_NAME_LEN + 1];
+    char sCommand[1024];
+
+    sigset(SIGTERM, SignalHandle);
+    sigset(SIGUSR1, SignalHandle);
+/*
+    sigset(SIGCHLD, SIG_IGN);
+*/
+    sighold(SIGCLD);
+
+    memset(&ipcBfTransHead, 0, sizeof(IPCBfTransHead));
+    OnLog(TRACE_ERROR,"BfReadPacket nSocket: [%d]", nSocket);
+    nLen = BfReadPacket(nSocket, &ipcBfTransHead);
+    if (nLen <= 0) {
+        OnLog(TRACE_ERROR,"BfReadPacket error: [%d]", nLen);
+        return -1;
+    }
+
+    if (memcmp(ipcBfTransHead.sTransCode, TRANS_FILE_HEAD, N_TRANS_CODE_LEN)) {
+        OnLog(TRACE_ERROR,"BfReadPacket Trans Head: [%s], error: [%s]", TRANS_FILE_HEAD, ipcBfTransHead.sTransCode);
+        return -2;
+    }
+    OnLog(TRACE_ERROR,"BfReadPacket sRemoteFileName : [%s]", ipcBfTransHead.sRemoteFileName);
+    OnLog(TRACE_ERROR,"BfReadPacket sNodID : [%s]", ipcBfTransHead.sNodID);
+    OnLog(TRACE_ERROR,"BfReadPacket sEventID : [%s]", ipcBfTransHead.sEventID);
+    OnLog(TRACE_ERROR,"BfReadPacket sCollShell : [%s]", ipcBfTransHead.sCollShell);
+    OnLog(TRACE_ERROR,"BfReadPacket sCollShellSize : [%s]", ipcBfTransHead.sCollShellSize);
+
+    strcat(ipcBfTransHead.sRemoteFileName,".i");
+
+    memset(sFileName, 0, sizeof(sFileName)); 
+    sprintf(sFileName, "%s/tools/sbin/%s", (char *)getenv("HOME"),ipcBfTransHead.sCollShell);
+    AllTrim(sFileName);
+    
+    code = BfGetFileSize(sFileName);
+    if (code < 0) {
+        OnLog(TRACE_ERROR,"BfGetFileSize error: [%d]", code);
+    }
+
+    OnLog(TRACE_ERROR,"Local File [%s] Size : [%d]", sFileName,code);
+
+    if ( code != atoi(ipcBfTransHead.sCollShellSize) )  /* 要更新脚本 */
+    {
+        code = BfWritePacket(nSocket, "1", 1);  
+        if (code != 0){
+            OnLog(TRACE_ERROR, "BfWritePacket error: [%d]", code);
+            return -3;
+        }
+        memcpy(&ipcBfTransHead1,&ipcBfTransHead,sizeof(ipcBfTransHead));
+        OnLog(TRACE_ERROR,"开始更新脚本[%s]", ipcBfTransHead.sCollShell);
+        nLen = BfReadPacket(nSocket, &ipcBfTransHead);
+        if (nLen <= 0) {
+            OnLog(TRACE_ERROR,"BfReadPacket error: [%d]", nLen);
+            return -1;
+        }
+
+        if (memcmp(ipcBfTransHead.sTransCode, TRANS_FILE_HEAD, N_TRANS_CODE_LEN)) {
+            OnLog(TRACE_ERROR,"BfReadPacket Trans Head: [%s], error: [%s]", TRANS_FILE_HEAD, ipcBfTransHead.sTransCode);
+            return -2;
+        }
+        OnLog(TRACE_ERROR,"BfReadPacket sRemoteFileName : [%s]", ipcBfTransHead.sRemoteFileName);
+
+        OnLog(TRACE_ERROR,"Begin TransFileReceive");
+        code=TransFileReceive(nSocket, &ipcBfTransHead);
+        if (code < 0) {
+            OnLog(TRACE_ERROR,"TransFileReceive error: [%d]", code);
+            return -1;
+        }
+        OnLog(TRACE_ERROR,"Success TransFileReceive");
+        sprintf(sCommand , "chmod +x %s" ,sFileName );
+        OnLog(TRACE_ERROR , "Cmd=[%s]" , sCommand );
+        code = system(sCommand);
+        if(code != TS_OK)
+        {
+           OnLog(TRACE_ERROR , "调用system错误[%s],errno=[%d],code=[%d]" , strerror(errno),errno,code);
+           return -1;
+        }
+        OnLog(TRACE_ERROR,"更新脚本[%s]完毕", ipcBfTransHead.sCollShell);
+        memcpy(&ipcBfTransHead,&ipcBfTransHead1,sizeof(ipcBfTransHead));
+    }
+    else
+    {
+        code = BfWritePacket(nSocket, "0", 1);  
+        if (code != 0){
+            OnLog(TRACE_ERROR, "BfWritePacket error: [%d]", code);
+            return -3;
+        }
+    }
+
+    OnLog(TRACE_ERROR,"收到请求文件");
+    OnLog(TRACE_ERROR,"Begin TransFileReceive");
+    code=TransFileReceive(nSocket, &ipcBfTransHead);
+    if (code < 0) {
+        OnLog(TRACE_ERROR,"TransFileReceive error: [%d]", code);
+        return -1;
+    }
+    OnLog(TRACE_ERROR,"Success TransFileReceive");
+
+    strcpy(ipcBfTransHead.sLocalFileName, ipcBfTransHead.sRemoteFileName);
+
+    strcpy(ipcBfTransHead.sRemoteFileName,"file/");
+    strcat(ipcBfTransHead.sRemoteFileName,ipcBfTransHead.sNodID);
+    strcat(ipcBfTransHead.sRemoteFileName,ipcBfTransHead.sEventID);
+    strcat(ipcBfTransHead.sRemoteFileName,".o");
+
+    code=ExecCommand(&ipcBfTransHead);
+    if (code < 0) {
+        OnLog(TRACE_ERROR,"ExecCommand error: [%d]", code);
+        return -1;
+    }
+    strcpy(ipcBfTransHead.sLocalFileName, ipcBfTransHead.sRemoteFileName);
+    strcat(ipcBfTransHead.sRemoteFileName,".r");
+
+    OnLog(TRACE_ERROR,"发送结果文件");
+    OnLog(TRACE_ERROR,"Begin TransFileSend");
+    code=TransFileSend(nSocket, &ipcBfTransHead);
+    if (code < 0) {
+        OnLog(TRACE_ERROR,"TransFileSend error: [%d]", code);
+        return -1;
+    }
+    OnLog(TRACE_ERROR,"Success TransFileSend");
+
+/*
+    CloseSocket(nSocket);
+*/
+
+    sigrelse(SIGCLD);
+    return 0;
+}
+
+/*******************************************************************************
+*函数名称: monInit
+*函数功能: 初始化服务
+*输入参数: 无
+*输出参数: 无
+*返回值：  无
+*********************************************************************************/
+int monInit()
+{
+    int   code;
+    char  sParaValue[50 + 1];
+    char  sProfileName[256 + 1];    /* 配置文件路径 */
+
+    memset(sParaValue, 0, sizeof(sParaValue));
+    memset(sProfileName, 0, sizeof(sProfileName));
+
+    /* 取配置文件路径 */
+    sprintf(sProfileName, "%s/etc/cltMain.ini", getenv("HOME"));
+
+    /* 获取最多启动子进程个数 */
+    memset(sParaValue, 0, sizeof(sParaValue));
+    code = GetProfileString("MONSVR", "MAX_CHD_NUM", sParaValue, 10, sProfileName);
+    if (code == 0){
+        gnChdNum = atoi(sParaValue);
+        OnLog(TRACE_ERROR,"monInit: Get MAX_CHD_NUM Sucess! gnChdNum=[%d]", gnChdNum);
+    } else{
+        gnChdNum = 50;
+    }
+
+    /* 获取失败时重复的次数 */
+    memset(sParaValue, 0, sizeof(sParaValue));
+    code = GetProfileString("MONSVR", "RETRY_NUM", sParaValue, 10, sProfileName);
+    if (code == 0){
+        nRetryNum = atoi(sParaValue);
+        OnLog(TRACE_ERROR,"monInit: Get RETRY_NUM Sucess! nRetryNum=[%d]", nRetryNum);
+    } else{
+        nRetryNum = 9999;
+    }
+
+    /* 获取失败时重复等待时间 */
+    memset(sParaValue, 0, sizeof(sParaValue));
+    code = GetProfileString("MONSVR", "WAIT_TIME", sParaValue, 10, sProfileName);
+    if (code == 0){
+        nWaitTime = atoi(sParaValue);
+        OnLog(TRACE_ERROR,"monInit: Get WAIT_TIME Sucess! nWaitTime=[%d]", nWaitTime);
+    } else{
+        nWaitTime = 50;
+    }
+
+    /* 获取服务端口 */
+    memset(sParaValue, 0, sizeof(sParaValue));
+    code = GetProfileString("MONSVR", "PORT", sParaValue, 10, sProfileName);
+    if (code == 0){
+        nPort = atoi(sParaValue);
+        OnLog(TRACE_ERROR,"monInit: Get PORT Sucess! nPort=[%d]", nPort);
+    } else{
+        nWaitTime = 8897;
+    }
+
+    return 0;
+}
+
+/*******************************************************************************
+*函数名称: TransFileReceive
+*函数功能: 接受远程发送来的文件到本地
+*输入参数
+*输出参数
+*返回值：
+*********************************************************************************/
+int TransFileReceive(int nSocket, IPCBfTransHead *pipcBfTransHead)
+{
+    int     code, nLen;
+    char    sBuf[N_MAX_DATA_LEN + 1];
+    char    sFileName[N_FILE_NAME_LEN + 1];
+
+    memset(sFileName, 0, sizeof(sFileName));
+    sprintf(sFileName, "%s/%s", getenv("HOME"), pipcBfTransHead->sRemoteFileName);
+
+    if (!memcmp(pipcBfTransHead->sCompressFlag, TRANS_FILE_COMPRESS, N_COMPRESS_FLAG_LEN)) {
+        strcat(sFileName, ".Z");
+    }
+
+  /*  OnLog(TRACE_ERROR,"BfRcvFile error: [%s]", strerror(errno));   */
+    code = BfRcvFile(nSocket, sFileName);
+    if (code != 0) {
+        OnLog(TRACE_ERROR,"BfRcvFile error: [%s]", strerror(errno));
+        return -1;
+    }
+
+    if (!memcmp(pipcBfTransHead->sCompressFlag, TRANS_FILE_COMPRESS, N_COMPRESS_FLAG_LEN)) {
+        code = BfUnCompress(sFileName);
+        if (code != 0) {
+            unlink(sFileName);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+/*******************************************************************************
+*函数名称: TransFileSend
+*函数功能: 把本地文件发送到远程
+*输入参数
+*输出参数
+*返回值：
+*********************************************************************************/
+int TransFileSend(int nSocket, IPCBfTransHead *pipcBfTransHead)
+{
+    int     code, nLen;
+    int     filefd;
+    char    sBuf[N_MAX_DATA_LEN + 1];
+    char    sFileName[N_FILE_NAME_LEN + 1];
+    ssize_t ulDataLen, ulFileLen;
+    IPCBfTransList ipcBfTransList;
+
+    memset(sFileName, 0, sizeof(sFileName));
+    sprintf(sFileName, "%s/%s", getenv("HOME"), pipcBfTransHead->sLocalFileName);
+
+    code = BfChkFile(sFileName);
+    if (code != 0) {
+        OnLog(TRACE_ERROR,"BfChkFile error: [%d]",code);
+        return -1;
+    }
+
+    memset(&ipcBfTransList, 0, sizeof(ipcBfTransList));
+    memcpy(ipcBfTransList.sRemoteFileName, pipcBfTransHead->sRemoteFileName, N_FILE_NAME_LEN);
+    memcpy(ipcBfTransList.sCompressFlag, pipcBfTransHead->sCompressFlag, N_COMPRESS_FLAG_LEN);
+    memcpy(ipcBfTransList.sTransFlag, pipcBfTransHead->sTransFlag, N_TRANS_FLAG_LEN);
+    memcpy(ipcBfTransList.sDelFileFlag,pipcBfTransHead->sDelFileFlag,N_DEL_FILE_FLAG_LEN);
+    memcpy(ipcBfTransList.sNodID, pipcBfTransHead->sNodID, TS_NOD_ID_LEN);
+    memcpy(ipcBfTransList.sEventID, pipcBfTransHead->sEventID, TS_EVENT_ID_LEN);
+    memcpy(ipcBfTransList.sCollShell, pipcBfTransHead->sCollShell,TS_NAME_LEN );
+    code = BfTransHead(nSocket, &ipcBfTransList);
+    if (code != 0){
+        OnLog(TRACE_ERROR, "BfTransHead error: %d", code);
+        return -3;
+    }
+
+    if (!memcmp(pipcBfTransHead->sCompressFlag, TRANS_FILE_COMPRESS, N_COMPRESS_FLAG_LEN)) {
+        code = BfCompress(sFileName);
+        if (code != 0) {
+            OnLog(TRACE_ERROR,"BfCompress error: [%d]",code);
+            return -1;
+        }
+    }
+
+    code = BfTransData(nSocket, sFileName, &ulFileLen);
+    if (code != 0) {
+        OnLog(TRACE_ERROR,"BfTransData error: [%d]",code);
+        return -1;
+    }
+
+    code = BfTransTail(nSocket, ulFileLen);
+    if (code != 0) {
+        OnLog(TRACE_ERROR,"BfTransTail error: [%d]",code);
+        return -1;
+    }
+
+    OnLog(TRACE_ERROR,"sFileName: %s", sFileName);
+    if (!memcmp(pipcBfTransHead->sCompressFlag, TRANS_FILE_COMPRESS, N_COMPRESS_FLAG_LEN)) {
+        unlink(sFileName);
+    }
+/*
+    if (0 == memcmp(pipcBfTransHead->sDelFileFlag, DEL_FILE_FLG_YES, N_DEL_FILE_FLAG_LEN)) {
+        remove(sFileName);
+    }
+*/
+    return 0;
+}
+
+void SignalHandle(int sig)
+{
+    int   i;
+    pid_t pid;
+    OnLog(TRACE_ERROR,"catch signal %d", sig);
+    sighold(SIGCHLD);
+    switch (sig) {
+        case SIGUSR1:
+        case SIGTERM:
+             break;
+        default:
+             break;
+    }
+    sigrelse(SIGCHLD);
+    return;
+}
+
+void Wait()
+{
+    int nPid, Status;
+    while (1) {
+        nPid = waitpid((pid_t)(-1), &Status, WNOHANG|WUNTRACED);
+        if (nPid > 0) {
+            if (--nChdNum == 0);
+        }else
+            break;
+    }
+}
+int ExecCommand(IPCBfTransHead*  pipcBfTransHead)
+{
+    char sCommand[1024];
+    char sFileName[512];
+    int code;
+    memset(sCommand , 0 , sizeof(sCommand));
+	code=GetFileName(sFileName);
+    /* 执行采集脚本，参数:节点ID,节点事件配置信息文件,脚本执行时间点 */
+    sprintf(sCommand , "%s %s %s %s/%s %s/%s 1>>%s 2>>%s" , pipcBfTransHead->sCollShell , pipcBfTransHead->sNodID , pipcBfTransHead->sEventID ,getenv("HOME"),pipcBfTransHead->sLocalFileName,getenv("HOME"),pipcBfTransHead->sRemoteFileName,sFileName,sFileName);
+    OnLog(TRACE_ERROR , "Cmd=[%s]" , sCommand );
+    code = system(sCommand);
+    if(code != TS_OK)
+    {
+       OnLog(TRACE_ERROR , "调用system错误[%s],errno=[%d],code=[%d]" , strerror(errno),errno,code);
+       return -1;
+    }
+    return 0;
+}
+
+int GetFileName(char *sFileName)
+{
+    char    sDateTime[14 + 1];
+
+    memset(sDateTime, 0x00, sizeof(sDateTime));
+    chdir(getenv("TRACEHOME"));
+
+    //建立以日期命名的目录
+    GetDate_FULL(sDateTime);
+    strcpy(sFileName, (char *)getenv("TRACEHOME"));
+    chdir(sFileName);
+    strcat(sFileName, "/");
+    strcat(sFileName, sDateTime);
+    mkdir(sFileName, S_IRWXU|S_IRWXG|S_IROTH);
+
+    strcat(sFileName,"/nohup.out");
+
+    return 0;
+}
+/***********************************  文件结束 *********************************/

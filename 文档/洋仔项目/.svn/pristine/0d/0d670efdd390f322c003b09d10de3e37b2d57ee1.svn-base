@@ -1,0 +1,36 @@
+/*
+ *  Copyright 2006, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved. 
+ *      
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  功能: 数据库头文件
+ *
+ *  Edit History:
+ *
+ *     2007/02/20 -gendb
+ */     
+        
+#ifndef _DBUSER_H           
+#define _DBUSER_H    
+
+typedef struct {
+        char            nod_id[4+1];
+        char            alarm_flg[1+1];
+} tbl_mon_sele_flg_def;
+typedef struct {
+        char            prov_id[2+1];
+        char            net_type[4+1];
+        char            alarm_flg[1+1];
+} tbl_mon_prov_flg_def;
+typedef struct {
+        char            prov_id[2+1];
+        char            alarm_flg[1+1];
+} tbl_mon_prov_flg1_def;
+
+
+#endif

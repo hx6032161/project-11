@@ -1,0 +1,115 @@
+/*****************************************************************************/
+/*                NCUP -- Shanghai Huateng Software System Inc.              */
+/*****************************************************************************/
+/* PROGRAM NAME: DbsLineInf.pc                                               */
+/* DESCRIPTIONS:                                                             */
+/*****************************************************************************/
+/*                             MODIFICATION LOG                              */
+/* DATE        PROGRAMMER     DESCRIPTION                                    */
+/*                                                                           */
+/*****************************************************************************/
+static char *Id = "@(#)$Header$";
+
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+#include "DbsDef.h"
+EXEC SQL BEGIN DECLARE SECTION;
+struct TBL_line_inf_Def
+{
+  long	usage_key;
+	char	srv_id[5];
+	char	line_index[3];
+	char	line_state[3];
+	char	line_max[3];
+	char	line_dsp[65];
+} ltTblLineInf;
+
+EXEC SQL END DECLARE SECTION;
+
+int DbsLINEINF( int vnOprType, struct TBL_line_inf_Def *vtpTblLineInf) 
+{
+
+	memcpy(
+		&ltTblLineInf,
+		vtpTblLineInf,
+		sizeof(ltTblLineInf));
+	switch(vnOprType) {
+	case DBS_SELECT:
+		EXEC SQL SELECT
+			line_index,
+			line_state,
+			line_max 
+		INTO
+			:ltTblLineInf.line_index,
+			:ltTblLineInf.line_state,
+			:ltTblLineInf.line_max
+		FROM 
+			tbl_line_inf
+		WHERE 
+            		usage_key = :ltTblLineInf.usage_key and
+			srv_id = :ltTblLineInf.srv_id;
+		if (sqlca.sqlcode)
+			return sqlca.sqlcode;
+		memcpy(
+			vtpTblLineInf,
+			&ltTblLineInf,
+			sizeof(ltTblLineInf));
+		return 0;
+	case DBS_SELECT1:
+		EXEC SQL SELECT
+			line_index,
+			line_state,
+			line_max 
+		INTO
+			:ltTblLineInf.line_index,
+			:ltTblLineInf.line_state,
+			:ltTblLineInf.line_max
+		FROM 
+			tbl_line_inf
+		WHERE 
+            		usage_key = :ltTblLineInf.usage_key and
+			srv_id = :ltTblLineInf.srv_id and
+			line_index = :ltTblLineInf.line_index;
+		if (sqlca.sqlcode)
+			return sqlca.sqlcode;
+		memcpy(
+			vtpTblLineInf,
+			&ltTblLineInf,
+			sizeof(ltTblLineInf));
+		return 0;
+	
+	
+	case DBS_UPDATE:
+		EXEC SQL UPDATE 
+			tbl_line_inf
+		SET
+			line_state = :ltTblLineInf.line_state
+		WHERE 
+            usage_key = :ltTblLineInf.usage_key and
+			srv_id = :ltTblLineInf.srv_id;
+		
+		if (sqlca.sqlcode)
+			return sqlca.sqlcode;
+			
+		return 0;
+		
+	case DBS_UPDATE1:
+		EXEC SQL UPDATE 
+			tbl_line_inf
+		SET
+			line_state = :ltTblLineInf.line_state
+		WHERE 
+            usage_key = :ltTblLineInf.usage_key and
+			srv_id = :ltTblLineInf.srv_id and
+			line_index = :ltTblLineInf.line_index;
+		
+		if (sqlca.sqlcode)
+			return sqlca.sqlcode;
+			
+		return 0;
+		
+	default:
+		return -1; 
+	} /* end of switch */
+} /* end of DbsLINEINF */

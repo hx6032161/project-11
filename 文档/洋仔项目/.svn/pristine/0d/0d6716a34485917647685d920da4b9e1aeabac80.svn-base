@@ -1,0 +1,218 @@
+/*****************************************************************************/
+/*                NCUP -- Shanghai Huateng Software System Inc.              */
+/*****************************************************************************/
+/* PROGRAM NAME: CommCore                                                    */
+/* DESCRIPTIONS:                                                             */
+/*****************************************************************************/
+/*                             MODIFICATION LOG                              */
+/* DATE        PROGRAMMER     DESCRIPTION                                    */
+/* 2005-04-06  Chen Liang     Changed for NCUP                               */
+/*****************************************************************************/
+#include "CommCore.h"
+
+char                gsSrvId[SRV_ID_LEN+1];
+char                gsToSrvId[SRV_ID_LEN+1];
+char                gsSrvSeqId[SRV_SEQ_ID_LEN+1];
+char                gsLogFile[LOG_NAME_LEN_MAX];
+T_SrvMsq            gatSrvMsq[SRV_MSQ_NUM_MAX];
+int                 gnTimeOut;
+
+void HandleExit (int n);
+void HandleTimeOut (int n);
+int CommInit(int argc, char **argv);
+
+int main(int argc, char **argv)
+{
+    char   sMsgInBuf[MSQ_MSG_SIZE_MAX];
+    char   sMsgOutBuf[MSQ_MSG_SIZE_MAX];
+    char   sSrcSrvId[SRV_ID_LEN+1]; 
+    int    nReturnCode;
+    int    nMsgInLen;
+    int    nMsgOutLen;
+    char * sendbuf;
+    char * rcvbuf;
+    long   rcvlen;
+    int    nSendLen;
+
+    if(argc < 3)
+    {
+        printf("Usage:%s srvid seq\n", argv[0]);
+        exit(-1);
+    }
+
+    nReturnCode = CommInit(argc, argv);
+    if (nReturnCode)
+    {
+        printf("CommCore: CommInit error[%d]\n",nReturnCode);
+        exit(-2);
+    }
+
+    if (sigset(SIGTERM, HandleExit) == SIG_ERR)
+        HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+               "sigset SIGTERM error, %d", errno);
+
+    if (sigset(SIGALRM, HandleTimeOut) == SIG_ERR)
+        HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__,
+               "sigset SIGALRM error, %d", errno);
+
+    HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "CommCore started");
+
+    while (1)
+    {
+        memset(sMsgInBuf,0,sizeof(sMsgInBuf));
+        nMsgInLen = MSQ_MSG_SIZE_MAX;
+        sigrelse (SIGTERM);
+        nReturnCode = MsqRcv (gsSrvId, gatSrvMsq, 0, MSQ_RCV_MODE_BLOCK, 
+                              &nMsgInLen, sMsgInBuf);
+        sighold (SIGTERM);
+        if (nReturnCode)
+        {
+            if (nReturnCode != ERR_CODE_MSQ_BASE + EINTR)
+            {
+                HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"MsqRcv error, %d", nReturnCode);
+                exit(-3);
+            }
+            else
+                continue;
+        }
+
+        memset (sSrcSrvId, 0, sizeof (sSrcSrvId));
+        memcpy (sSrcSrvId, sMsgInBuf, SRV_ID_LEN);
+        nSendLen = nMsgInLen - SRV_ID_LEN*2 - FLD_MSQ_TYPE_LEN;
+        HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__,"received %d byte msg from %s", nMsgInLen, sSrcSrvId);
+        HtDebugString (gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__,sMsgInBuf, nMsgInLen);
+
+        nReturnCode = mb_init();
+        if (nReturnCode) {
+            HtLog( gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "mb_init error %d", nReturnCode);
+            continue;
+        }
+
+        if((sendbuf = (char *) mb_alloc("CARRY", NULL, MAX_BUFSIZE)) == NULL) 
+        {
+            mb_term();
+            HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "mb_alloc sendbuf error!");
+            continue;
+        }
+        if((rcvbuf = (char *) mb_alloc("CARRY", NULL, MAX_BUFSIZE)) == NULL)
+        {
+            mb_term();
+            HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "mb_alloc rcvbuf error!");
+            mb_free(sendbuf);
+            continue;
+        }
+        
+        memcpy(sendbuf, sMsgInBuf + SRV_ID_LEN*2 + FLD_MSQ_TYPE_LEN, nSendLen);
+       
+        alarm(gnTimeOut); 
+        nReturnCode = mb_call( "svcicdctxn", (char *)sendbuf, nSendLen, (char **)&rcvbuf, &rcvlen, (long)0);
+        alarm( 0 );
+        
+        if (nReturnCode)
+        {
+            HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "mb_call error! [%d]", mb_errno);
+            mb_free(sendbuf);
+            mb_free(rcvbuf);
+            mb_term();
+            continue;
+        }
+        HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "mb_call success!");
+        
+        memset(sMsgOutBuf,0,sizeof(sMsgOutBuf));
+        memcpy(sMsgOutBuf, gsSrvId, SRV_ID_LEN);
+        memcpy(sMsgOutBuf+SRV_ID_LEN, gsToSrvId, SRV_ID_LEN);
+        memset(sMsgOutBuf+SRV_ID_LEN*2, ' ', FLD_MSQ_TYPE_LEN);
+        memcpy(sMsgOutBuf+SRV_ID_LEN*2+FLD_MSQ_TYPE_LEN, rcvbuf+1, rcvlen-1);
+        nMsgOutLen = SRV_ID_LEN*2+FLD_MSQ_TYPE_LEN+rcvlen-1;
+
+        mb_free(sendbuf);
+        mb_free(rcvbuf);
+        mb_term();
+
+        nReturnCode = MsqSnd (gsToSrvId, gatSrvMsq, 0, nMsgOutLen, sMsgOutBuf);
+        if (nReturnCode)
+        {
+            HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,"MsqSnd to %s error, %d", gsToSrvId, nReturnCode);
+            continue;
+        }
+
+        HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__,"send msg to %s", gsToSrvId);
+        HtDebugString (gsLogFile, HT_LOG_MODE_DEBUG, __FILE__, __LINE__,sMsgOutBuf, nMsgOutLen);
+    }
+}
+
+/*****************************************************************************/
+/* FUNC:   int CommInit (int argc, char **argv)                            */
+/* INPUT:  argc: 参数个数                                                    */
+/*         argv: 参数                                                        */
+/* OUTPUT: 无                                                                */
+/* RETURN: 0: 成功, 其它: 失败                                               */
+/* DESC:   连接数据库, 设置全局变量, 获取运行参数,                           */
+/*         初始化消息队列                                                    */
+/*****************************************************************************/
+int CommInit (int argc, char **argv)
+{
+    int              nReturnCode;
+    Tbl_srv_inf_Def  tTblSrvInf;
+    int              lUsageKey;
+
+    /* get server id arg 1; server seq arg 2; to server id arg 3 */
+    strcpy(gsSrvId, argv[1]);
+    strcpy(gsSrvSeqId, argv[2]);
+    strcpy(gsToSrvId, argv[3]);
+
+    /* connect to database */
+    nReturnCode = DbsConnect ();
+    if (nReturnCode) return (nReturnCode);
+
+    /* get log file name from tbl_srv_inf */
+    if (getenv(SRV_USAGE_KEY))
+        lUsageKey=atoi (getenv(SRV_USAGE_KEY));
+    else
+        return -2;
+
+    memset ((char *)&tTblSrvInf, 0x00, sizeof (tTblSrvInf));
+    tTblSrvInf.usage_key = lUsageKey;
+    memcpy (tTblSrvInf.srv_id, gsSrvId, SRV_ID_LEN);
+    nReturnCode = DbsSRVINF(DBS_SELECT, &tTblSrvInf);
+    if (nReturnCode)
+        return (nReturnCode);
+
+    CommonRTrim(tTblSrvInf.srv_name);
+    sprintf (gsLogFile, "%s.%s.log", tTblSrvInf.srv_name, gsSrvSeqId);
+
+    /* init msg queue */
+    memset ((char *)gatSrvMsq, 0, sizeof (gatSrvMsq));
+    nReturnCode = MsqInit (gsSrvId, gatSrvMsq);
+    if (nReturnCode)
+    {
+        HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "MsqInit error, %d", nReturnCode);      
+        return (nReturnCode);
+    }
+
+    if (getenv("TL_COMM_TIMEOUT"))
+        gnTimeOut = atoi (getenv("TL_COMM_TIMEOUT"));
+    else
+        gnTimeOut = 30;
+    HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__,"gnTimeOut %d", gnTimeOut);
+
+    /* disconnect db */
+    nReturnCode = DbsDisconnect ();
+    if (nReturnCode)
+    {
+        HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+                "DbsDisconnect error, %d", nReturnCode);      
+    }
+    return (0);
+}
+
+void HandleExit (int n)
+{
+    HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "CommCore exits");
+    exit( 1 );
+}
+
+void HandleTimeOut (int n)
+{
+    HtLog( gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "mb_call timeout");
+}

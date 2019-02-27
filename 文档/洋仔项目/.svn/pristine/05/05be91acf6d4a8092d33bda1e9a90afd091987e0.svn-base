@@ -1,0 +1,8 @@
+make -f hsmsvr.mak clean
+make -f hsmsvr.mak
+make -f hsmmng.mak clean
+make -f hsmmng.mak
+make -f hsmmon.mak clean
+make -f hsmmon.mak
+make -f hsmchk.mak clean
+make -f hsmchk.mak

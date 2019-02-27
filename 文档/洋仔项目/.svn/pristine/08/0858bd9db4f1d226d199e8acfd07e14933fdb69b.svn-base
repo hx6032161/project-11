@@ -1,0 +1,120 @@
+
+#include "DbsDef.h"
+#include "POSdb.h"
+
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+EXEC SQL BEGIN DECLARE SECTION;
+struct TBL_txndetail_Def
+{
+    char         inst_date   [5 ];
+	char  		batch_number	[   7];
+	char  		term_ssn	[  7];
+	char  		term_id	[   9];
+	char        mcht_id [16];
+	char         card_type [ 3];
+	char  		pan	[  21];
+	char         atm_trans[13];
+}htTbltxndetail;
+long count;
+EXEC SQL END DECLARE SECTION;
+
+int DbsTblTxnDetail(int nOpr,tbl_txn_detail_def *ptTblTxnDetail)
+{
+	memcpy ((char *)&htTbltxndetail, (char *)ptTblTxnDetail, sizeof (htTbltxndetail));
+	
+	switch (nOpr)
+	{
+	case DBS_SELECT1:
+		EXEC SQL select *           
+			into :htTbltxndetail			   
+			from tbl_txn_detail
+			where CARD_ACCP_TERM_ID = :htTbltxndetail.term_id
+				and CARD_ACCP_ID = :htTbltxndetail.mcht_id
+			and INST_DATE = :htTbltxndetail.inst_date ;
+		if (sqlca.sqlcode)
+			return sqlca.sqlcode;
+
+		memcpy ((char *)ptTblTxnDetail, (char *)&htTbltxndetail, sizeof (htTbltxndetail));
+		break;
+	
+	case DBS_SELECT2:
+		EXEC SQL select count(*)
+		     into :count
+		     from tbl_txn_detail
+		     where CARD_ACCP_TERM_ID = :htTbltxndetail.term_id 
+		     	and CARD_ACCP_ID = :htTbltxndetail.mcht_id
+		     	and BATCH_NUMBER = :htTbltxndetail.batch_number
+		     	and INST_DATE = :htTbltxndetail.inst_date
+		     	group by CARD_ACCP_TERM_ID;
+		 if (sqlca.sqlcode)
+			return sqlca.sqlcode;
+			
+			sprintf(htTbltxndetail.term_ssn,"%06ld",count);
+            memcpy ((char *)ptTblTxnDetail, (char *)&htTbltxndetail, sizeof (htTbltxndetail));
+		
+			break;
+			
+	case DBS_CURSOR:
+       EXEC SQL DECLARE
+            cur_txn_detail_1
+       CURSOR FOR SELECT
+            *
+       FROM 
+           tbl_txn_detail;
+
+       return sqlca.sqlcode;
+       break;
+  case DBS_OPEN:
+        EXEC SQL OPEN
+             cur_txn_detail_1;
+	
+       return sqlca.sqlcode; 
+       break;
+  case DBS_FETCH: 
+       EXEC SQL FETCH
+            cur_txn_detail_1
+       INTO
+           :htTbltxndetail;
+
+       if (sqlca.sqlcode == DBS_NULL) sqlca.sqlcode = 0; 
+       memcpy ((char *)ptTblTxnDetail, (char *)&htTbltxndetail, sizeof (htTbltxndetail));
+       return sqlca.sqlcode; 
+       break;
+  case DBS_CLOSE:
+       EXEC SQL CLOSE
+            cur_txn_detail_1;
+       return sqlca.sqlcode; 
+       break;			
+	case DBS_INSERT :	   
+		    EXEC SQL insert into tbl_txn_detail(  
+		         INST_DATE    ,
+  				 BATCH_NUMBER    ,
+   				 CARD_ACCP_TERM_ID    ,
+   				 CARD_ACCP_ID      ,
+   				 CARD_TYPE             ,
+   				 PAN                 ,
+  				 TERM_SSN             ,
+ 				  AMT_TRANS     
+		    ) values (
+		        :htTbltxndetail.inst_date ,
+			    :htTbltxndetail.batch_number ,
+			    :htTbltxndetail.term_id ,
+			    :htTbltxndetail.mcht_id,
+			    :htTbltxndetail.card_type,
+			    :htTbltxndetail.pan ,
+         	    :htTbltxndetail.term_ssn ,
+			    :htTbltxndetail.atm_trans 
+		    );
+
+	     if (sqlca.sqlcode)
+	         return sqlca.sqlcode;
+	     return 0;
+	     break;
+	default:
+		break;
+	}
+	return 0;
+}
+

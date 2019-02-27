@@ -1,0 +1,76 @@
+/*****************************************************************************/
+/*                NCUP -- Shanghai Huateng Software System Inc.              */
+/*****************************************************************************/
+/* PROGRAM NAME: DbsIpcInf.pc                                                */
+/* DESCRIPTIONS:                                                             */
+/*****************************************************************************/
+/*                             MODIFICATION LOG                              */
+/* DATE        PROGRAMMER     DESCRIPTION                                    */
+/*                                                                           */
+/*****************************************************************************/
+static char *Id = "@(#)$Header$";
+
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+#include "DbsDef.h"
+EXEC SQL BEGIN DECLARE SECTION;
+struct TBL_ipc_inf_Def
+{
+	long	usage_key;
+	long	ipc_index;
+	char	ipc_val[513];
+} ltTblIpcInf;
+EXEC SQL END DECLARE SECTION;
+
+int DbsIPCINF( int vnOprType, struct TBL_ipc_inf_Def *vtpTblIpcInf) 
+{
+
+    memcpy(
+       &ltTblIpcInf,
+       vtpTblIpcInf,
+       sizeof(ltTblIpcInf));
+    switch(vnOprType) {
+    case DBS_CURSOR:
+        EXEC SQL DECLARE
+            cur_ipc_inf_1
+        CURSOR FOR SELECT
+            usage_key,
+            ipc_index,
+            ipc_val
+        FROM 
+            tbl_ipc_inf
+        WHERE 
+            usage_key = :ltTblIpcInf.usage_key
+        ORDER BY
+            usage_key,
+            ipc_index;
+        return sqlca.sqlcode;
+
+    case DBS_OPEN:
+        EXEC SQL OPEN
+            cur_ipc_inf_1;
+	return sqlca.sqlcode; 
+
+    case DBS_FETCH: 
+        EXEC SQL FETCH
+            cur_ipc_inf_1 
+        INTO
+            :ltTblIpcInf.usage_key,
+            :ltTblIpcInf.ipc_index,
+            :ltTblIpcInf.ipc_val;
+        memcpy(
+           vtpTblIpcInf,
+           &ltTblIpcInf,
+           sizeof(*vtpTblIpcInf));
+	return sqlca.sqlcode; 
+    
+    case DBS_CLOSE:
+        EXEC SQL CLOSE
+            cur_ipc_inf_1;
+	return sqlca.sqlcode; 
+
+    default:
+        return -1; 
+    } /* end of switch */
+} /* end of DbsIPCINF */

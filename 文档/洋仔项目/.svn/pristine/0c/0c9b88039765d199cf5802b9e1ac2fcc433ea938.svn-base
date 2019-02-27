@@ -1,0 +1,468 @@
+/********************************************/
+/* Copywrite (C) SCUBE  1998                */
+/* Shanghai Scube System Company	    */
+/********************************************/
+
+/******************************************
+*
+*	Author: Freeman Liu
+*
+******************************************/
+
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
+FILE	*fsql;
+FILE	*fctl;
+/*
+FILE 	*fdef;
+FILE	*fhvar;  
+FILE	*fdbs; */
+char	GsTable[80];
+char	GsTableCap[80];
+char	GsFile[80];
+char	GsBuffer[200];
+struct Schema 
+{
+char	name[30];
+int	type;
+double  len;
+};
+
+struct Schema	GtSchema[400];
+struct Schema	GtIdx[50];
+int		GiSchema;
+int		GiIdx;
+
+int 		GiStart;
+
+#define		LEN_DATE	14 	
+
+#define		TYPE_CHAR	1
+#define		TYPE_VARCHAR2	2
+#define		TYPE_NUMBER	3
+#define		TYPE_INTEGER	4
+#define		TYPE_DATE	5
+
+main(argc,argv)
+int	argc;
+char	**argv;
+{
+	int	LiI;
+
+	if ( argc != 2 )
+	{
+		printf("Try this :%s <table>\n",argv[0] );
+		exit(1);
+	}
+	printf("\n\n\n\n");
+	printf("          ******************************************\n");
+	printf("          DataBase Service routine generation tool  \n");
+	printf("                         SCUBE 1998                 \n");
+	printf("          ******************************************\n");
+	printf("\n");
+	printf("This tools need the $DBA environmental variable \n");
+	printf("to locate the home directory\n");
+	printf("The input %s.sql is located in %s/sql/tab directory.\n",argv[1],getenv("DBA"));
+	printf("Be sure the .sql file is in create table/create index syntax of Oracle \n");
+	printf("The result %s.ctl is located in %s/dbload/ctl directory.\n", argv[1],getenv("DBA"));
+	printf("\n\n");
+	printf("Process O.K.\n");
+	printf("\n\n");
+
+	strcpy(GsTable,argv[1]);
+	strcpy(GsTableCap,argv[1]);
+	for(LiI=0;LiI<(int)strlen(GsTable);LiI++)
+	{
+		GsTable[LiI]=tolower(GsTable[LiI]);
+		GsTableCap[LiI]=toupper(GsTable[LiI]);
+	}
+
+	strcpy(GsFile,(char *)getenv("DBA"));
+	strcat(GsFile,"/sql/tab/");
+	strcat(GsFile,GsTable);
+	strcat(GsFile,".sql");
+	fsql=fopen(GsFile,"r");	
+	if ( fsql == NULL )
+	{
+		printf("sql file not found:%s ",GsFile );
+		exit(1);
+	}
+	
+	strcpy(GsFile,(char *)getenv("NATOPDIR"));
+	strcat(GsFile,"/database/dba/ctl");
+	strcat(GsFile,GsTable);
+	strcat(GsFile,".ctl");
+	fctl=fopen(GsFile,"w");  
+	if ( fctl == NULL )
+	{
+		printf("ctl file write error");
+		exit(1);
+	}
+
+	memset(GtSchema,0x00,sizeof(GtSchema));
+	memset(GtIdx,0x00,sizeof(GtIdx));
+	GiSchema=GiIdx=0;
+
+	gen_ctl();
+	fclose(fctl);
+}
+
+/* 	gen_wd function is used to create db.h 
+	and [TABLE]_DEF.h files.	*/
+
+gen_ctl()
+{
+	char	*LpKey,*LpC1,*LpC2,*LpC3,*LpC4,*LpC5;
+	char	LsStr[200],spaces[2001] = "";
+	int	LiI,LiNum;
+	double	LiFlt;
+
+    fputs("LOAD DATA\n", fctl);
+    fprintf(fctl, "INFILE '$DBA/dbload/data/%s.dat'\n", GsTable);
+    fputs("APPEND\n", fctl);
+    fprintf(fctl, "INTO TABLE %s\n", GsTableCap);
+    fputs("FIELDS TERMINATED BY \",\"\n", fctl);
+    fputs("(\n", fctl);
+
+	rewind(fsql);
+
+	GiStart=0;
+	while(1)
+	{
+		memset(GsBuffer,0x00,sizeof(GsBuffer));
+		if ( fgets(GsBuffer,sizeof(GsBuffer),fsql) == NULL )
+			break;
+		for(LiI=0;LiI<(int)strlen(GsBuffer);LiI++) 
+			GsBuffer[LiI]=tolower(GsBuffer[LiI]);
+
+		LpKey=strtok(GsBuffer,", /*()\t\n}{;");
+		if ( LpKey == NULL ) 
+			continue;
+		if ( strcmp(LpKey,"create") == 0 )
+		{
+			LpC1=strtok(NULL,", /*()\t\n;{}");
+			if ( LpC1 == NULL )
+				continue;
+			else if ( strcmp(LpC1,"table") == 0 )
+			{
+				GiStart=1;
+                /*
+				sprintf(LsStr,"typedef struct {\n");
+				fputs(LsStr,fctl); */
+				sprintf(LsStr,"/*	Default values for table %s.	*/\n",GsTable);
+			 	/* fputs(LsStr,fdef); */
+			}
+			else
+			{
+				if ( GiStart )
+				{
+					GiStart=0;
+					sprintf(LsStr,")\n");
+					fputs(LsStr,fctl);
+				}
+			}
+			continue;
+		}
+		
+		if ( ! GiStart )
+		{
+			continue;
+		}
+
+		LpC1=strtok(NULL,", /*()\t\n;{}");
+		if ( LpC1 == NULL )
+			continue;
+		if ( strcmp(LpC1,"number") == 0 )
+		{
+		  LpC2 = strtok(NULL,", /*()\t\n;{}");
+		  if (LpC2 == NULL)
+			continue;
+		  else
+		    {
+		     LiNum = atoi(LpC2);
+		     LpC3 = strtok(NULL,", /*()\t\n;{}");
+		     if (LpC3 == NULL || strcmp(LpC3,"not") == 0)
+			{
+			  if (LiNum > 9 || suffix(LpKey,"_at"))
+			   {
+			    sprintf(LsStr,"\t%s\t\tINTEGER EXTERNAL DEFAULTIF (%s = BLANKS),\n",LpKey, LpKey);
+			    fputs(LsStr,fctl);
+			    strcpy(GtSchema[GiSchema].name,LpKey);
+			    GtSchema[GiSchema].type=TYPE_NUMBER;
+			    GiSchema++;
+			   }
+			  else
+			   {
+			    sprintf(LsStr,"\t%s\t\tINTEGER EXTERNAL DEFAULTIF (%s = BLANKS),\n",LpKey, LpKey);
+			    fputs(LsStr,fctl);
+			    strcpy(GtSchema[GiSchema].name,LpKey);
+			    GtSchema[GiSchema].type=TYPE_INTEGER;
+			    GiSchema++;
+			   }
+			  sprintf(LsStr,"#define\t%s_DEF\t0\n",LpKey);
+			 /*  fputs(LsStr,fdef); */
+			}
+		     else
+			{
+			if (strcmp(LpC3,"default") == 0)
+			  {
+			  LpC4 = strtok(NULL,", /*()\t\n;{}");
+			  if (LiNum > 9 || suffix(LpKey,"_at"))
+                           {
+			                sprintf(LsStr,"\t%s\t\tINTEGER EXTERNAL DEFAULTIF (%s = BLANKS),\n",LpKey, LpKey);
+                            fputs(LsStr,fctl);
+                            strcpy(GtSchema[GiSchema].name,LpKey);
+                            GtSchema[GiSchema].type=TYPE_NUMBER;
+                            GiSchema++;
+                           }
+                          else
+                           {
+			                sprintf(LsStr,"\t%s\t\tINTEGER EXTERNAL DEFAULTIF (%s = BLANKS),\n",LpKey, LpKey);
+                            fputs(LsStr,fctl);
+                            strcpy(GtSchema[GiSchema].name,LpKey);
+                            GtSchema[GiSchema].type=TYPE_INTEGER;
+                            GiSchema++;
+                           }
+			  LiNum = atoi(LpC4);
+			  sprintf(LsStr,"#define\t%s_DEF\t%d\n",LpKey,LiNum);
+			  /*  fputs(LsStr,fdef); */
+			  }
+			else
+			  {
+			  sprintf(LsStr,"\t%s\t\tINTEGER EXTERNAL DEFAULTIF (%s = BLANKS),\n",LpKey, LpKey);
+			  fputs(LsStr,fctl);
+			  strcpy(GtSchema[GiSchema].name,LpKey);
+			  GtSchema[GiSchema].type = TYPE_NUMBER;
+			  GiSchema++;
+			  LpC4 = strtok(NULL,", /*()\t\n;{}");
+			  if (strcmp(LpC4,"default") == 0)
+			   {
+			     LpC5 = strtok(NULL,", /*()\t\n;{}");
+			     LiFlt = atof(LpC5);
+                             sprintf(LsStr,"#define\t%s_DEF\t%6.2f\n",LpKey,LiFlt);
+                            /*  fputs(LsStr,fdef); */
+			   }
+			  else
+			   {
+			    sprintf(LsStr,"#define\t%s_DEF\t0\n",LpKey);
+			    /* fputs(LsStr,fdef); */
+			   }
+			  }
+			}
+		     }
+		}
+		else if ( strcmp(LpC1,"integer") == 0 )
+		{
+			sprintf(LsStr,"\t%s\t\tINTEGER EXTERNAL DEFAULTIF (%s = BLANKS),\n",LpKey, LpKey);
+			fputs(LsStr,fctl);
+
+			strcpy(GtSchema[GiSchema].name,LpKey);
+			GtSchema[GiSchema].type=TYPE_INTEGER;
+			GiSchema++;
+			LpC2=strtok(NULL,", /*()\t\n;{}");
+			if (strcmp(LpC2,"default") == 0)
+			  {
+			   LpC3 = strtok(NULL,", /*()\t\n;{}");
+                           LiNum = atoi(LpC3);
+                           sprintf(LsStr,"#define\t%s_DEF\t%d\n",LpKey,LiNum);
+                           /* fputs(LsStr,fdef); */
+			  }
+			else
+			  {
+			    sprintf(LsStr,"#define\t%s_DEF\t0\n",LpKey);
+                           /*  fputs(LsStr,fdef); */
+			  }
+		}
+		else if ( strcmp(LpC1,"char") == 0  ||
+		     strcmp(LpC1,"varchar2") == 0)
+		{
+			LpC2=strtok(NULL,", /*()\t\n;{}");
+			if ( LpC2 == NULL )
+				continue;
+			LiNum=atoi(LpC2);
+            if(strcmp(LpKey, "last_upd_opr_id")==0)
+               sprintf(LsStr, "\tlast_upd_opr_id\t\tconstant \"99999\",\n");
+            else
+               if(strcmp(LpKey, "last_upd_pgm_id")==0)
+                  sprintf(LsStr, "\tlast_upd_pgm_id\t\tconstant \"LOAD\",\n");
+               else
+			      sprintf(LsStr,"\t%s\t\tchar(%4d),\n",LpKey,LiNum);
+			fputs(LsStr,fctl);
+			strcpy(GtSchema[GiSchema].name,LpKey);
+			GtSchema[GiSchema].type=TYPE_CHAR;
+			GtSchema[GiSchema].len=LiNum;
+			GiSchema++;
+			LpC3=strtok(NULL,", /*()\t\n;{}");
+			if (strcmp(LpC3,"default") == 0)
+			  {
+			   LpC4 =  strtok(NULL,", /*()\'\"\t\n;{}");
+			   if (LpC4 == NULL || strcmp(LpC4,"not") == 0)
+			     {
+				gen_spaces(spaces,LiNum);
+				if (strcmp(LpC1,"varchar2") == 0)
+				  sprintf(LsStr,"#define\t%s_DEF\t\" \"\n",
+				    LpKey);
+				else
+			     	  sprintf(LsStr,"#define\t%s_DEF\t\"%s\"\n",
+                                    LpKey,spaces);
+                             	/* fputs(LsStr,fdef); */
+			     }
+			   else
+                             {
+				toCap(LpC4);
+				sprintf(LsStr,"#define\t%s_DEF\t\"%s\"\n",
+				  LpKey,LpC4);
+                               /* fputs(LsStr,fdef); */
+			     }
+                          }
+                        else
+                          {
+			    gen_spaces(spaces,LiNum);
+                            if (strcmp(LpC1,"varchar2") == 0)
+                                sprintf(LsStr,"#define\t%s_DEF\t\" \"\n",
+                                    LpKey);
+                            else
+                            	sprintf(LsStr,"#define\t%s_DEF\t\"%s\"\n",
+					LpKey,spaces);
+                           /* fputs(LsStr,fdef); */
+			  }	
+		}
+		else if (strcmp(LpC1,"date")==0)
+		{
+			sprintf(LsStr,"\t%s\t\tSYSDATE\n", LpKey);
+			fputs(LsStr,fctl);
+			strcpy(GtSchema[GiSchema].name,LpKey);
+			GtSchema[GiSchema].type = TYPE_DATE;
+			GtSchema[GiSchema].len=LEN_DATE;
+			GiSchema++;
+			gen_date(spaces);
+			sprintf(LsStr,"#define\t%s_DEF\t\"%s\"\n",
+                                LpKey,spaces);
+                       /* fputs(LsStr,fdef); */
+		}
+		else if (strcmp(LpC1,"float") == 0)
+		{
+			sprintf(LsStr,"\t%s\t\tINTEGER EXTERNAL DEFAULTIF (%s = BLANKS),\n",LpKey, LpKey);
+			fputs(LsStr,fctl);
+			strcpy(GtSchema[GiSchema].name,LpKey);
+			GtSchema[GiSchema].type = TYPE_NUMBER;
+			GiSchema++;
+			LpC2 = strtok(NULL,", /*()\t\n;{}");
+			if (strcmp(LpC2,"default") == 0)
+			  {
+			   LpC3 =  strtok(NULL,", /*()\t\n;{}");
+			   LiFlt = atof(LpC3);
+			   sprintf(LsStr,"#define\t%s_DEF\t%6.2f\n",LpKey,LiFlt);
+                          /* fputs(LsStr,fdef); */
+			  }
+			else
+			  {
+			   sprintf(LsStr,"#define\t%s_DEF\t0\n",LpKey);
+			   /* fputs(LsStr,fdef); */
+			  }
+		}
+		continue;
+	}
+}
+
+suffix(buf,suf)
+char *buf;
+char *suf;
+{
+/**************The Original function will cause segment fault *********
+		when *buf does not contain *suf.
+		It's disabled by Dongyi.   2000-3-9
+***********************************************************************/					
+/*
+	char *tmp;
+	tmp = strstr(buf,suf);
+	if (strcmp(suf,tmp) == 0)
+		return (1);
+	else
+	{
+	   if (tmp == NULL)
+		return 0;
+	   else
+	   {
+		tmp = strstr(tmp+strlen(suf),suf);
+		if (strcmp(suf,tmp) == 0)
+			return 1;
+		else
+		{
+		   if (tmp == NULL)
+			return 0;
+		   else
+		   {
+		   	tmp = strstr(tmp+strlen(suf),suf);
+		   	if (strcmp(suf,tmp) == 0)
+				return 1;
+		   	else
+				return (0);
+		   }
+		}
+	   }
+	}
+*/
+   int iBufLen,iSufLen;
+   iBufLen = strlen(buf);
+   iSufLen = strlen(suf);
+   if(iBufLen <iSufLen)
+      return 0;
+   else if (strcmp(buf+(iBufLen-iSufLen),suf) == 0)
+      return 1;
+   else
+      return 0;   	
+
+}
+
+gen_date(buf)
+char *buf;
+{
+
+	time_t tval;
+     	struct tm *tmptr;
+	strcpy(buf,"");
+     	tval = time(NULL);
+     	tmptr = localtime(&tval);	
+	if (tmptr->tm_year > 70)
+		tmptr->tm_year += 1900;
+	else
+		tmptr->tm_year += 2000;
+	sprintf(buf,"%4d%02d%02d%02d%02d%02d",tmptr->tm_year,
+        tmptr->tm_mon+1,tmptr->tm_mday,tmptr->tm_hour,
+        tmptr->tm_min,tmptr->tm_sec);
+}
+
+gen_spaces(buf,len)
+char * buf;
+int len;
+{
+	int cnt;
+	strcpy(buf,"");
+	for(cnt=0;cnt<len;cnt++)
+	strcat(buf," ");
+}
+
+toCap(IsBuffer)
+char	*IsBuffer;
+{
+	int	LiI;
+	for(LiI=0;LiI<(int)strlen(IsBuffer);LiI++)
+	{
+		*(IsBuffer+LiI)=toupper(*(IsBuffer+LiI));
+	}
+}
+
+char * rights(buf,len)
+char * buf;
+int len;
+{
+	char * 	retn;
+	int	LiI;
+	retn = buf+(int)strlen(buf)-len;
+	return retn;
+}
+
+

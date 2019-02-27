@@ -1,0 +1,226 @@
+/*****************************************************************************/
+/*                TOPLINK+ -- Shanghai Huateng Software System Inc.          */
+/*****************************************************************************/
+/* PROGRAM NAME: Dumpmsg.c                                                   */
+/* DESCRIPTIONS: dump old msg in queue.                                      */
+/*****************************************************************************/
+/*							   MODIFICATION	LOG								 */
+/* DATE		   PROGRAMMER	  DESCRIPTION									 */
+/*****************************************************************************/
+#include "Dumpmsg.h"
+
+char gsSrvId[SRV_ID_LEN+1];
+char gsSrvSeqId[SRV_SEQ_ID_LEN+1];
+char gsLogFile[LOG_NAME_LEN_MAX];
+
+long glUsageKey;
+
+int gnCheckHour;
+int gnSleepMin;
+
+int main(short argc, char **argv)
+{
+	int		nReturnCode;
+	int		nMsgSize;
+	int		nAlarmTime=0;
+
+	nReturnCode = DumpmsgInit (argc, argv);
+	if (nReturnCode)
+	{
+		printf("DumpmsgInit: DumpmsgInit error %d\n", nReturnCode);
+		return nReturnCode;
+	}
+	
+	if (sigset(SIGTERM, HandleExit) == SIG_ERR)
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "sigset SIGTERM error, %d.", errno);
+
+	sighold (SIGTERM);
+
+	HtLog(	gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "Dumpmsg started.");
+	
+	/* HANDLE TRANSACTION */
+	while (1)
+	{
+		Dumpmsg ();
+		sigrelse (SIGTERM);
+		sleep (gnSleepMin * 60 ) ;
+		sighold (SIGTERM);
+	}
+	/*return 0;*/
+}
+
+int DumpmsgInit (short argc, char **argv)
+{
+	int				nReturnCode;
+	Tbl_srv_inf_Def	tTblSrvInf;
+
+	/* get server id, arg 1; server seq, arg 2 */
+	strcpy (gsSrvId, argv[1]);
+	strcpy(gsSrvSeqId, argv[2]);
+	
+	if (getenv(SRV_USAGE_KEY))
+		glUsageKey=atoi (getenv(SRV_USAGE_KEY));
+	else
+		return -1;
+
+	gnCheckHour = atoi (getenv (DM_CHECK_HOUR));
+	if (gnCheckHour == 0)
+		gnCheckHour = DM_DEFAULT_CHECK_HOUR;
+	gnSleepMin = atoi (getenv (DM_SLEEP_MIN));
+	if (gnSleepMin == 0)
+		gnSleepMin = DM_DEFAULT_SLEEP_MIN;
+		
+	/* connect to database */
+	nReturnCode = DbsConnect ();
+	if (nReturnCode)
+		return (nReturnCode);
+	
+	/* get log file name from tbl_srv_inf */
+	memset ((char *)&tTblSrvInf, 0x00, sizeof (tTblSrvInf));
+	tTblSrvInf.usage_key = glUsageKey;
+	memcpy (tTblSrvInf.srv_id, gsSrvId, SRV_ID_LEN);
+	nReturnCode = DbsSRVINF (DBS_SELECT, &tTblSrvInf);
+	if (nReturnCode)
+		return nReturnCode;
+	CommonRTrim (tTblSrvInf.srv_name);
+	sprintf (gsLogFile, "%s.%s.log", tTblSrvInf.srv_id, gsSrvSeqId);
+
+	sigset(SIGALRM, FUNC_NONE);
+
+	return 0;
+}
+
+void FUNC_NONE()
+{
+	return;
+}
+
+void Dumpmsg ()
+{
+	char		sFunc[]="Dumpmsg";
+	char		sDateTime[15];
+	char		sMsgBuf[DM_BUF_MAX];
+	int			nReturnCode;
+	long		lMsqId;
+	long		lMsqType;
+    time_t		tCurrentTime;
+    struct tm	*ptTm;
+    Tbl_dumpmsg_Def	tTblDumpmsg;
+	Tbl_srv_inf_Def	tTblSrvInf;
+	Tbl_msq_inf_Def	tTblMsqInf;
+
+	HtLog(	gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "%s begin", sFunc);
+
+	/* delete old record in table */
+    time (&tCurrentTime);
+    tCurrentTime -= gnCheckHour*3600l;
+    ptTm = localtime (&tCurrentTime);
+    sprintf (sDateTime, "%04d%02d%02d%02d%02d%02d", 
+    	ptTm->tm_year+1900, ptTm->tm_mon+1, ptTm->tm_mday,
+    	ptTm->tm_hour, ptTm->tm_min, ptTm->tm_sec);
+
+	DbsBegin ();
+	memset (&tTblDumpmsg, 0, sizeof (tTblDumpmsg));
+	memcpy (tTblDumpmsg.creation_time, sDateTime, 14);
+	nReturnCode = DbsDumpmsg (DBS_DELETE, &tTblDumpmsg);
+	if (nReturnCode)
+	{
+		DbsRollback ();
+		HtLog(	gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsDumpmsg delete err, %d", nReturnCode);
+	}
+	else
+	{
+		DbsCommit ();
+		HtLog(	gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "DbsDumpmsg delete succ");
+	}
+	
+	DbsBegin ();
+	
+	/* get each record, and try to receive that msg in queue */
+	memset (&tTblDumpmsg, 0, sizeof (tTblDumpmsg));
+	nReturnCode = DbsDumpmsg( DBS_CURSOR, &tTblDumpmsg);
+	if (nReturnCode)
+	{
+		DbsRollback ();
+		HtLog(	gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsDumpmsg declare cursor err, %d", nReturnCode);
+		return;
+	}
+	
+	nReturnCode = DbsDumpmsg( DBS_OPEN, &tTblDumpmsg);
+	if (nReturnCode)
+	{
+		DbsRollback ();
+		HtLog(	gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsDumpmsg open cursor err, %d", nReturnCode);
+		return;
+	}
+	
+	while (DbsDumpmsg( DBS_FETCH, &tTblDumpmsg) == 0)
+	{
+		/* got a record, try to receive that msg */
+		/* get recv queue id for srv_id */
+		memset ((char *)&tTblSrvInf, 0x00, sizeof (tTblSrvInf));
+		memcpy (tTblSrvInf.srv_id, tTblDumpmsg.srv_id, SRV_ID_LEN);
+		tTblSrvInf.usage_key = glUsageKey;
+		nReturnCode = DbsSRVINF (DBS_SELECT, &tTblSrvInf);
+		if (nReturnCode)
+		{
+			HtLog(	gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsSRVINF select err, %d", nReturnCode);
+			continue;
+		}
+
+		if (tTblSrvInf.msq_int_id[0] == ' ')
+			continue;
+
+		/* get queue key from tbl_msq_inf */
+		memset ((char *)&tTblMsqInf, 0x00, sizeof (tTblMsqInf));
+		memcpy (tTblMsqInf.msq_int_id, tTblSrvInf.msq_int_id, sizeof (tTblMsqInf.msq_int_id));
+		nReturnCode = DbsTBL_MSQ_INF(DBS_SELECT, &tTblMsqInf);
+		if (nReturnCode)
+		{
+			HtLog(	gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsMSQINF select err, %d", nReturnCode);
+			continue;
+		}
+		/* open msq */
+		nReturnCode = msgget (atol (tTblMsqInf.msq_key), MSQ_GET_FLAG);
+		if (nReturnCode == -1)
+		{
+			HtLog(	gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "msgget err, %d", errno);
+			continue;
+		}
+		lMsqId = nReturnCode;
+	
+		/* receive msg */
+		alarm(2);
+		lMsqType = atol (tTblDumpmsg.msq_type);
+		nReturnCode = msgrcv(lMsqId, sMsgBuf, DM_BUF_MAX, lMsqType, 0);
+		alarm(0);
+		
+		if (nReturnCode <= 0)
+			continue;
+		
+		HtLog(	gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "received msg for server %s", tTblDumpmsg.srv_id);
+		HtDebugString (gsLogFile, HT_LOG_MODE_DEBUG, __FILE__,  __LINE__, sMsgBuf, 24);
+		
+		/* upon successful receive, delete that record */
+		nReturnCode = DbsDumpmsg( DBS_DELETE1, &tTblDumpmsg);
+		if (nReturnCode)
+			HtLog(	gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsDumpmsg delete one record err, %d", nReturnCode);
+	}
+
+	nReturnCode = DbsDumpmsg( DBS_CLOSE, &tTblDumpmsg);
+	if (nReturnCode)
+	{
+		HtLog(	gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsDumpmsg close cursor err, %d", nReturnCode);
+	}
+
+	DbsCommit ();
+	
+	HtLog(	gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "%s end", sFunc);
+}
+
+void HandleExit (int n)
+{
+	DbsDisconnect ();
+	HtLog(	gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "Dumpmsg exits.");
+	exit( 1 );
+}

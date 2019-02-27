@@ -1,0 +1,25 @@
+1.create table 
+
+create table student(
+	id INT PRIMARY KEY NOT NULL，
+	name VARCHAR (20) NOT NULL,
+	sex VARCHAR (2),
+	age INT
+);
+
+create table course(
+	course_id varchar (4) primary key not null,
+	course_name varchar (40) NOt NULL,
+	
+);
+show tables; 显示数据库中所有表
+
+删除表drop table  tb
+清空表truncate table tb 
+delete table tb 
+或
+delete table tb where 条件 可以一行一行删除表
+
+添加列ALTER table student add student_courseName varchar(40);
+修改列ALTER TABLE person MODIFY number BIGINT NOT NULL;
+

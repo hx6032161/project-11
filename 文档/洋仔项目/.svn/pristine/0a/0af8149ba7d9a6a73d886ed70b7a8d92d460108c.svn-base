@@ -1,0 +1,22 @@
+#!/bin/sh
+#for i  in awk -F "|" '{mail_address=$1  phone_nm=$2 }' $HOME/online/etc/tmp.cfg
+#do 
+#echo $mail_address
+#echo $phone_nm
+#done
+
+awk -F "|" '{if(NR<3) print $0}' $HOME/online/etc/tmp.cfg
+
+n=0
+for i in awk  '{print NR}' $HOME/online/etc/tmp.cfg
+do 
+awk '{print NR}' $HOME/online/etc/tmp.cfg|read num
+if [ $num -eq $i ]
+then
+  awk -F "|" '{ print $1}' $HOME/online/etc/tmp.cfg|read mail_address 
+  echo $mail_address
+fi
+done
+
+
+

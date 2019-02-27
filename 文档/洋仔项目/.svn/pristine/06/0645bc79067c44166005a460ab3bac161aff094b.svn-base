@@ -1,0 +1,283 @@
+/*
+ * opyright 2006, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  $Id: gendbsvr.c,v 1.2 2007/06/21 03:39:40 centerfe Exp $
+ *
+ *  功能: 表bth_alipay_txn基本操作函数
+ *
+ *  Edit History:
+ *
+ *    2011/07/07 -gendb
+ */
+
+#include "db.h"
+#include "HtLog.h"
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+#define MODULE_NAME "bth_alipay_yyt_sum.pc"
+#define TABLE_NAME "BTH_ALIPAY_YYT_SUM"
+
+typedef struct
+{
+    char   date_settlmt  [8+1];
+    char   type_flag     [1+1];
+    char   mcht_no       [15+1];
+    char   mcht_nm       [60+1];
+    char   acct_type     [1+1];
+    char   mcht_acct     [40+1];
+    char   acct_nm       [80+1];
+    double   settle_amt;    
+    double   txn_amt;      
+    double   settle_fee1; 
+    double   settle_fee2;
+    double   txn_num;  
+    char   settle_flag   [1+1];
+    char   fail_resn     [200+1];
+    char   rec_crt_ts    [14+1];
+    char   rec_upd_ts    [14+1]; 
+}BTH_ALIPAY_YYT_SUM_Def;
+
+typedef struct
+{
+       short        date_settlmt_ind;
+       short        type_flag_ind;
+       short        mcht_no_ind;
+       short        mcht_nm_ind;
+       short        acct_type_ind;
+       short        mcht_acct_ind;
+       short        acct_nm_ind;
+       short        settle_amt_ind;
+       short        txn_amt_ind;
+       short        settle_fee1_ind;
+       short        settle_fee2_ind;
+       short        txn_num_ind; 
+       short        settle_flag_ind;  
+       short        fail_resn_ind;
+       short        rec_crt_ts_ind;
+       short        rec_upd_t_sind; 
+}BTH_ALIPAY_YYT_SUM_IND_Def;
+
+#define SQL_CODE_CHECK(a) \
+        if ((ret_code = ProcSQLCode(KeyText,MODULE_NAME,a))\
+                        !=SUCCESS) return ret_code
+
+#define GET_TRC_MSG()\
+        sprintf(KeyText, "%s: ", TABLE_NAME)
+/*************************************************************************/
+/*    input : DBS_FUNC   the dbs func                                    */
+/*                       DBS_INIT                                        */
+/*                       DBS_SELECT                                      */
+/*                       DBS_LOCK                                        */
+/*                       DBS_UPDATE                                      */
+/*                       DBS_INSERT                                      */
+/*                       DBS_DELETE                                      */
+/*                   The struct pointer defined in db.h.                 */
+/*         return : the sqlca.sqlcode                                    */
+/*************************************************************************/
+int DbsBTH_ALIPAY_YYT_SUM(int ifunc, BTH_ALIPAY_YYT_SUM_Def  *pBTH_ALIPAY_YYT_SUM )
+{
+    char KeyText[128]; 
+    int ret_code;
+    BTH_ALIPAY_YYT_SUM_IND_Def  ind;
+   
+    switch(ifunc)
+    {
+        case DBS_SELECT:
+            EXEC SQL select * into
+                :pBTH_ALIPAY_YYT_SUM  :ind
+                 from bth_alipay_yyt_sum
+                 where
+                    DATE_SETTLMT = :pBTH_ALIPAY_YYT_SUM -> date_settlmt and 
+                    MCHT_NO = :pBTH_ALIPAY_YYT_SUM -> mcht_no and
+                    TYPE_FLAG = :pBTH_ALIPAY_YYT_SUM -> type_flag and 
+                    MCHT_ACCT = :pBTH_ALIPAY_YYT_SUM -> mcht_acct;
+          
+           if (sqlca.sqlcode==-1405) sqlca.sqlcode=0;
+           return sqlca.sqlcode;  
+       
+       case DBS_UPDATE:
+           EXEC SQL update bth_alipay_yyt_sum set
+               DATE_SETTLMT = :pBTH_ALIPAY_YYT_SUM -> date_settlmt,
+               TYPE_FLAG = :pBTH_ALIPAY_YYT_SUM -> type_flag,
+               MCHT_NO = :pBTH_ALIPAY_YYT_SUM -> mcht_no,
+               MCHT_NM = :pBTH_ALIPAY_YYT_SUM -> mcht_nm,
+               ACCT_TYPE = :pBTH_ALIPAY_YYT_SUM -> acct_type,
+               MCHT_ACCT = :pBTH_ALIPAY_YYT_SUM -> mcht_acct,
+               ACCT_NM = :pBTH_ALIPAY_YYT_SUM -> acct_nm,
+               SETTLE_AMT = :pBTH_ALIPAY_YYT_SUM -> settle_amt,
+               TXN_AMT = :pBTH_ALIPAY_YYT_SUM -> txn_amt,
+               SETTLE_DEE1 = :pBTH_ALIPAY_YYT_SUM -> settle_fee1, 
+               SETTLE_FEE2 = :pBTH_ALIPAY_YYT_SUM -> settle_fee2,
+               TXN_NUM = :pBTH_ALIPAY_YYT_SUM -> txn_num, 
+               SETTLE_FLAG = :pBTH_ALIPAY_YYT_SUM -> settle_flag,
+               FAIL_RESN = :pBTH_ALIPAY_YYT_SUM -> fail_resn,
+               REC_CRT_TS = :pBTH_ALIPAY_YYT_SUM -> rec_crt_ts,
+               REC_UPD_TS = :pBTH_ALIPAY_YYT_SUM -> rec_upd_ts
+         where
+              DATE_SETTLMT = :pBTH_ALIPAY_YYT_SUM -> date_settlmt and      
+              MCHT_NO = :pBTH_ALIPAY_YYT_SUM -> mcht_no ;
+                    
+            if (sqlca.sqlcode==-1405) sqlca.sqlcode=0;
+            return sqlca.sqlcode;
+        case DBS_DELETE :
+           EXEC SQL delete from bth_alipay_yyt_sum
+            where      
+              DATE_SETTLMT = :pBTH_ALIPAY_YYT_SUM -> date_settlmt and 
+              MCHT_NO = :pBTH_ALIPAY_YYT_SUM -> mcht_no and
+              TYPE_FLAG = :pBTH_ALIPAY_YYT_SUM -> type_flag and       
+              MCHT_ACCT = :pBTH_ALIPAY_YYT_SUM -> mcht_acct;
+          if (sqlca.sqlcode==-1405) sqlca.sqlcode=0;
+          return sqlca.sqlcode;
+        case DBS_INSERT :
+           EXEC SQL insert into bth_alipay_yyt_sum values (
+
+              :pBTH_ALIPAY_YYT_SUM -> date_settlmt,
+              :pBTH_ALIPAY_YYT_SUM -> type_flag,
+              :pBTH_ALIPAY_YYT_SUM -> mcht_no,
+              :pBTH_ALIPAY_YYT_SUM -> mcht_nm,
+              :pBTH_ALIPAY_YYT_SUM -> acct_type,
+              :pBTH_ALIPAY_YYT_SUM -> mcht_acct,
+              :pBTH_ALIPAY_YYT_SUM -> acct_nm,
+              :pBTH_ALIPAY_YYT_SUM -> settle_amt,
+              :pBTH_ALIPAY_YYT_SUM -> txn_amt,
+              :pBTH_ALIPAY_YYT_SUM -> settle_fee1,
+              :pBTH_ALIPAY_YYT_SUM -> settle_fee2,
+              :pBTH_ALIPAY_YYT_SUM -> txn_num,
+              :pBTH_ALIPAY_YYT_SUM -> settle_flag,
+              :pBTH_ALIPAY_YYT_SUM -> fail_resn,
+              :pBTH_ALIPAY_YYT_SUM -> rec_crt_ts,
+              :pBTH_ALIPAY_YYT_SUM -> rec_upd_ts
+                    );
+         if (sqlca.sqlcode==-1405) sqlca.sqlcode=0;
+          return sqlca.sqlcode;
+        default :  return(543);
+    }
+}
+
+int OpenCursorBTH_ALIPAY_YYT_SUM(char* sSqlBuf)
+{
+    EXEC SQL PREPARE select_txn from :sSqlBuf;
+    if(sqlca.sqlcode!=0)
+    {
+        return sqlca.sqlcode;
+    }
+    EXEC SQL DECLARE txn_cursor_pBTH_ALIPAY_YYT_SUM CURSOR FOR select_txn;
+    if(sqlca.sqlcode!=0)
+    {
+        return sqlca.sqlcode;
+    }
+    EXEC SQL OPEN txn_cursor_pBTH_ALIPAY_YYT_SUM;
+    if(sqlca.sqlcode!=0)
+    {
+        return sqlca.sqlcode;
+    }
+    return 0;
+}
+
+int FetchCursorBTH_ALIPAY_YYT_SUM(BTH_ALIPAY_YYT_SUM_Def * pBTH_ALIPAY_YYT_SUM)
+{
+    EXEC SQL FETCH txn_cursor_pBTH_ALIPAY_YYT_SUM INTO :pBTH_ALIPAY_YYT_SUM;
+    if (sqlca.sqlcode == 1403 || sqlca.sqlcode == 100)
+        return sqlca.sqlcode;
+    if ((sqlca.sqlcode!=0) && (sqlca.sqlcode!= -1405))
+    {
+        return sqlca.sqlcode;
+    }
+        return 0;
+}
+
+int CloseCursorBTH_ALIPAY_YYT_SUM()
+{
+    EXEC SQL CLOSE txn_cursor_pBTH_ALIPAY_YYT_SUM;
+    return sqlca.sqlcode;
+}
+
+/* add by wangt @20180417 */
+int DbsSELdouble6( int ifunc, char * sql_cmd, char *Out1, char *Out2, char *Out3, char *Out4, char *Out5, char *Out6, char *Out7, char *Out8, char *Out9, char *Out10, char *Out11, char *Out12)
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+    char     Count1[8+1];
+    char     Count2[8+1];
+    char     Count3[1+1];
+    char     Count4[15+1];
+    char     Count5[60+1];
+    char     Count6[1+1];
+    char     Count7[40+1];
+    char     Count8[80+1];
+    char     Count9[12+1];
+    char     Count10[12+1];
+    char     Count11[12+1];
+    char     Count12[10+1];
+    EXEC SQL END DECLARE SECTION;
+
+    memset(Count1, 0x00, sizeof(Count1));
+    memset(Count2, 0x00, sizeof(Count2));
+    memset(Count3, 0x00, sizeof(Count3));
+    memset(Count4, 0x00, sizeof(Count4));
+    memset(Count5, 0x00, sizeof(Count5));
+    memset(Count6, 0x00, sizeof(Count6));
+    memset(Count7, 0x00, sizeof(Count7));
+    memset(Count8, 0x00, sizeof(Count8));
+    memset(Count9, 0x00, sizeof(Count9));
+    memset(Count10, 0x00, sizeof(Count10));
+    memset(Count11, 0x00, sizeof(Count11));
+    memset(Count12, 0x00, sizeof(Count12));
+
+    switch( ifunc )
+    {
+      case DBS_OPEN :
+            EXEC SQL PREPARE sql_tmp6 FROM :sql_cmd;
+            if( sqlca.sqlcode )
+            return sqlca.sqlcode;
+            EXEC SQL DECLARE cur_count_flg_double6 CURSOR FOR sql_tmp6;
+            if( sqlca.sqlcode )
+            return sqlca.sqlcode;
+
+            EXEC SQL CLOSE cur_count_flg_double6;
+            EXEC SQL OPEN cur_count_flg_double6;
+            if( sqlca.sqlcode )
+            return sqlca.sqlcode;
+        break;
+
+      case DBS_FETCH :
+            EXEC SQL FETCH cur_count_flg_double6 INTO :Count1, Count2, Count3, Count4, Count5, Count6, Count7, Count8, Count9, Count10, Count11, Count12;
+            if (sqlca.sqlcode == 1403 || sqlca.sqlcode == 100)
+            return sqlca.sqlcode;
+            if (sqlca.sqlcode==0)
+            {
+                memcpy(Out1, Count1, sizeof(Count1));
+                memcpy(Out2, Count2, sizeof(Count2));
+                memcpy(Out3, Count3, sizeof(Count3));
+                memcpy(Out4, Count4, sizeof(Count4));
+                memcpy(Out5, Count5, sizeof(Count5));
+                memcpy(Out6, Count6, sizeof(Count6));
+                memcpy(Out7, Count7, sizeof(Count7));
+                memcpy(Out8, Count8, sizeof(Count8));
+                memcpy(Out9, Count9, sizeof(Count9));
+                memcpy(Out10, Count10, sizeof(Count10));
+                memcpy(Out11, Count11, sizeof(Count11));
+                memcpy(Out12, Count12, sizeof(Count12));
+            }
+        break;
+
+      case DBS_CLOSE :
+            EXEC SQL CLOSE
+            cur_count_flg_double6;
+            return sqlca.sqlcode;
+
+        break;
+
+            default :
+            return(-1);
+    }
+
+  return sqlca.sqlcode;
+
+}

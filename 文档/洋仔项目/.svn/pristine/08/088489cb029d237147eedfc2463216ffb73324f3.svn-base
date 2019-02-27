@@ -1,0 +1,78 @@
+/*****************************************************************************/
+/*                NCUP -- Shanghai Huateng Software System Inc.              */
+/*****************************************************************************/
+/* PROGRAM NAME: Dbs_Mcht_Amount_Limit.sqc                                            */
+/* DESCRIPTIONS:                                                             */
+/*****************************************************************************/
+/*                             MODIFICATION LOG                              */
+/* gendbsvr.c,v 1.1 2008/12/16 05:35:00 apsdev Exp                           */
+/* DATE: 2008-12-23                                                          */
+/* PROGRAMMER: wcz                                                           */
+/* MODIFY DATE:                                                              */ 
+/* MODIFY PROGRAMMER:                                                        */
+/* 根据限额表 查看当天交易是否超出限额 支队 1501  i                           */     
+/*****************************************************************************/
+
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+#include "DbsDef.h"
+#include "POSdb.h"
+EXEC SQL BEGIN DECLARE SECTION;
+
+  char sMcht_no          [15 + 1];
+  char sAmount           [12+1]; 
+  char sHost_date	 [8+1]; 
+  short  bind;
+  char sCard_Type        [2 + 1];
+EXEC SQL END DECLARE SECTION;
+
+int Dbs_cst_mertrans_cnt_inf( char *smount, char *smcht_no,int opt,char *sHostdate) 
+{
+	memset(sMcht_no,0x00,sizeof(sMcht_no));
+	memset(sAmount,0x00,sizeof(sAmount));
+	memcpy( sMcht_no,smcht_no, sizeof(sMcht_no));
+	memcpy(sHost_date,sHostdate,sizeof(sHost_date));
+        if(0 ==opt)
+	{
+             EXEC SQL SELECT nvl(to_char(day_amt * 100),0) into :sAmount 
+		     FROM tbl_mcht_base_inf 
+		where mcht_cd = :sMcht_no and txn_num='1501';
+	     memcpy(smount,sAmount,sizeof(sAmount));
+             return sqlca.sqlcode;
+	}
+	else if(1 ==opt)
+	{
+             EXEC SQL  select nvl(to_char(sum(to_number(amt_trans))),0) into :sAmount 
+			 from Tbl_n_txn 
+		 where card_accp_id= :sMcht_no and Txn_num='1501'
+			and trans_state ='1' and  revsal_flag !='1' and cancel_flag !='1' 
+			and substr(inst_date,1,8) = :sHost_date;    
+		memcpy(smount,sAmount,sizeof(sAmount));
+             return sqlca.sqlcode; 
+	} 
+} 
+
+/*add by zlw --- 20140910*/
+int Dbs_Mcht_base_inf(char *sCard_type_yes, char *smount, char *smcht_no)
+{
+	memset(sCard_Type,0x00,sizeof(sCard_Type));
+	memset(sCard_type_yes,0x00,sizeof(sCard_type_yes));
+	memset(smount,0x00,sizeof(smount));
+	memset(sMcht_no,0x00,sizeof(sMcht_no));
+
+	memcpy(sMcht_no,smcht_no,sizeof(sMcht_no));
+
+	EXEC SQL SELECT nvl(to_char(nvl(trim(day_amt),0) * 100),0),
+			card_type_yes 
+							into :sAmount,
+			         	        	     :sCard_Type		
+		FROM tbl_mcht_base_inf
+		where mcht_no = 			     :sMcht_no;
+
+	memcpy(smount,sAmount,sizeof(sAmount));
+	memcpy(sCard_type_yes,sCard_Type,sizeof(sCard_Type));
+	
+	return sqlca.sqlcode;
+}
+

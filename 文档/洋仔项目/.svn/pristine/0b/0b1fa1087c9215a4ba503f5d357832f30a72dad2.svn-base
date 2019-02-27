@@ -1,0 +1,246 @@
+/*****************************************************************************
+ *  Copyright 2013, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  文 件 名: BrhFposMonthReport.c
+ *  功    能：个人理财POS业务统计表
+ *  编程人员: fmxy
+ *  开发时间: 2013/03/27
+ *  备    注: 
+*****************************************************************************/
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+
+#include "MRpt.h"
+
+#define  RPT_ID  "FposMonthReport"    /*存放报表的文件名*/
+
+typedef struct{
+    char     term_id[8+1];
+    char     mcht_no[15+1];
+    char     term_addr[350+1];
+    char     term_sta[1+1];
+}BRH_FPOS_TERM;
+
+typedef struct{
+    char     term_id[8+1];
+    char     mcht_no[15+1];
+    char     first_date[8+1];
+    char     last_date[8+1];
+    int      amtnum;
+    double   sumamt;
+    double   sumfee;
+}BRH_FPOS_REPORT;
+
+/*****************************************************
+ * BrhFposMonth
+ * 个人理财POS业务统计表(分行)
+ *
+ * @param   in  StlmDate : 报表生成日期
+ *
+ * @return  =  0: success
+ *          <> 0: error
+*****************************************************/
+
+int BrhFposMonth(char * StlmDate)
+{
+    int     iRc=0;
+    char    sSqlCmd    [1024];
+    char    sFName     [ 512];
+    char    sSysDate   [ 8+1];
+    char    sInitDate  [ 8+1];
+    char    sFirstDate [ 8+1];
+    char    sLastDate  [ 8+1];
+    char    sMonth     [ 6+1];
+    char    sTermAddr  [40+1];
+    int     iCount=0;
+    int     iAmtNum=0;
+    double  dAmtTrans=0.0;
+    double  dAmtFee=0.0;
+    
+    FILE * fp = NULL;
+    BRH_FPOS_TERM         brhfposterm;
+    BRH_FPOS_REPORT       brhfposreport;
+    tbl_brh_info_def      tblbrhinfo;
+    
+    char * sFmt[]=
+    {
+      "                                           无锡农村商业银行个人理财POS业务统计表                                    \n",
+      "机构号：%s     机构名称：%s      统计月份：%s\n",
+      "序号      |终端号  |装机地址                                |理财交易笔数|理财交易金额交易|手续费支出  |\n",
+      "%-10d|%-8s|%-40s|%-12d|%-16.2lf|%-12.2lf|\n",
+      "=====================================================================================================================================\n",
+      "合计： 终端数 %-12d  理财交易笔数 %-12d 理财交易金额交易 %-12.2lf  手续费支出 %-12.2lf \n",
+    };
+    
+    memset(sSysDate,0x00,sizeof(sSysDate));
+    strncpy(sSysDate,StlmDate,sizeof(sSysDate)-1);
+    
+    memset(sInitDate,0x00,sizeof(sInitDate));
+   
+    CalNewDate(sSysDate,-2,sInitDate);
+    HtLog( StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "InitDate: [%s]", sInitDate);
+    memset(sLastDate,0x00,sizeof(sLastDate));
+    GetLastDay(sInitDate,sLastDate);
+    HtLog( StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "sLastDate: [%s]", sLastDate);
+    if(strcmp(sInitDate,sLastDate)!=0){
+        HtLog( StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "不是月末不生成报表\n");
+        return 0;
+    }
+    
+    memset(sMonth,0x00,sizeof(sMonth));
+    strncpy(sMonth,sInitDate,sizeof(sMonth)-1);
+    
+    memset(sFirstDate,0x00,sizeof(sFirstDate));
+    strncpy(sFirstDate,sMonth,sizeof(sMonth)-1);
+    strncpy(sFirstDate+6,"01",2);
+    
+    memset(sSqlCmd,0x00,sizeof(sSqlCmd));
+    sprintf(sSqlCmd,"select * from tbl_brh_info where brh_sta='0' and brh_level in ('0','1') ");
+    HtLog(StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"sSqlCmd[%s]",sSqlCmd);
+    iRc=OpenCursorTBL_BRH_INFO(sSqlCmd);
+    if(iRc){
+        HtLog(StlmLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__,"OpenCursorTBL_BRH_INFO \
+                  error [%d]",iRc);
+        CloseCursorTBL_BRH_INFO();
+        return -1;
+    }
+    while(1)
+    {
+        memset(&tblbrhinfo,0x00,sizeof(tbl_brh_info_def));
+        iRc=FetchCursorTBL_BRH_INFO(&tblbrhinfo);
+        if(iRc == SQL_NOTFOUND){
+            HtLog(StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"Data Not Found");
+            break;
+        }
+        else if(iRc){
+            HtLog(StlmLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__,"FetchCursorTBL_BRH_INFO \
+                  error [%d]",iRc);
+            CloseCursorTBL_BRH_INFO();
+            return -1;
+        }
+        CommonRTrim(tblbrhinfo.brh_id);
+        CommonRTrim(tblbrhinfo.brh_name);
+        
+        memset(sFName,0x00,sizeof(sFName));
+        sprintf(sFName, "%s/report/%s/%s/%s_%s_%s.txt", getenv("RPTHOME"),sFirstDate,tblbrhinfo.brh_id,RPT_ID,
+                  tblbrhinfo.brh_id,sFirstDate);   
+        HtLog( StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "sFName: [%s]", sFName);
+        fp=fopen(sFName,"w+");
+        if(fp==NULL){
+            HtLog(StlmLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__,"fopen sFName[%s] \
+                  error ",sFName);
+            CloseCursorTBL_BRH_INFO();
+            fclose(fp);
+            return -1;
+        }
+        fprintf(fp,sFmt[0]);
+        fprintf(fp,sFmt[1],tblbrhinfo.brh_id,tblbrhinfo.brh_name,sMonth);
+        fprintf(fp,sFmt[2]);
+        
+        memset(sSqlCmd,0x00,sizeof(sSqlCmd));
+        sprintf(sSqlCmd,"select t.term_id,t.mcht_cd,t.term_addr,t.term_sta \
+                         from tbl_term_inf t,tbl_mcht_base_inf b  \
+                         where b.mcht_no=t.mcht_cd and b.mcht_group_flag='5'\
+                         and b.acq_inst_id='%s' order by t.term_id",tblbrhinfo.brh_id);
+        HtLog(StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"sSqlCmd: [%s]",sSqlCmd);
+        iRc=OpenCursorBRH_FPOS_MONTH(sSqlCmd);                                                      
+        if(iRc)
+        {                                                                           
+            HtLog(StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,                     
+                "OpenCursorBRH_FPOS_MONTH error: %d", iRc);
+            CloseCursorTBL_BRH_INFO();
+            CloseCursorBRH_FPOS_MONTH();                                                            
+            fclose(fp);                             
+            return -1;                                                                  
+        }
+        
+        iCount=0;
+        iAmtNum=0;
+        dAmtTrans=0.0;
+        dAmtFee=0.0;
+        while(1) 
+        {                                                                                                                                           
+            memset(&brhfposterm,0x00,sizeof(BRH_FPOS_TERM));          
+            iRc=FetchCursorBRH_FPOS_MONTH(&brhfposterm);                   
+            if(iRc==SQL_NOTFOUND)
+            {                                       
+                HtLog(StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__,
+                    "FetchCursorBRH_FPOS_MONTH data not found");      
+                break;                                                   
+            } 
+            else if(iRc)
+            {                                              
+                HtLog(StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+                    "FetchCursorBRH_FPOS_MONTH error: %s", DbsError());         
+                CloseCursorTBL_BRH_INFO();
+                CloseCursorBRH_FPOS_MONTH();                                                            
+                fclose(fp);                                                             
+                return -1;                                                
+            }
+            CommonRTrim(brhfposterm.term_id);
+            CommonRTrim(brhfposterm.mcht_no);
+            CommonRTrim(brhfposterm.term_addr);
+            CommonRTrim(brhfposterm.term_sta);
+            
+            memset(&brhfposreport,0x00,sizeof(BRH_FPOS_REPORT));
+            memcpy(brhfposreport.term_id,brhfposterm.term_id,sizeof(brhfposterm.term_id)-1);
+            memcpy(brhfposreport.mcht_no,brhfposterm.mcht_no,sizeof(brhfposterm.mcht_no)-1);
+            memcpy(brhfposreport.first_date,sFirstDate,sizeof(sFirstDate)-1);
+            memcpy(brhfposreport.last_date,sLastDate,sizeof(sLastDate)-1);
+            brhfposreport.amtnum=0;
+            brhfposreport.sumamt=0.0;
+            brhfposreport.sumfee=0.0;
+            
+            iRc=DbsBRH_FPOS_MONTH(DBS_SELECT1,&brhfposreport);                                                      
+            if(iRc&&iRc!=SQL_NOTFOUND)
+            {   
+            	  HtLog(StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,
+                    "term_id[%s],mcht_no[%s],sFirstDate[%s],sLastDate[%s]"
+                    ,brhfposreport.term_id,brhfposreport.mcht_no
+                    ,brhfposreport.first_date,brhfposreport.last_date);                                                                   
+                HtLog(StlmLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,                     
+                    "DbsBRH_FPOS_MONTH DBS_SELECT1 error: %d", iRc);
+                CloseCursorTBL_BRH_INFO();
+                CloseCursorBRH_FPOS_MONTH();                                                            
+                fclose(fp);                             
+                return -1;                                                                  
+            }
+            
+            if(brhfposterm.term_sta[0]=='7' && brhfposreport.amtnum==0)
+            {
+                HtLog(StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__,
+                    "term_id[%s],term_sta[%s],amtnum[%d]"
+                    ,brhfposterm.term_id,brhfposterm.term_sta,brhfposreport.amtnum);
+                continue;
+            }
+            
+            iCount++;
+            iAmtNum=iAmtNum+brhfposreport.amtnum;
+            dAmtTrans=dAmtTrans+brhfposreport.sumamt;
+            dAmtFee=dAmtFee+brhfposreport.sumfee;
+                                             
+            fprintf(fp, sFmt[3],iCount,brhfposterm.term_id,brhfposterm.term_addr
+                ,brhfposreport.amtnum,brhfposreport.sumamt,brhfposreport.sumfee);                                                                   
+        }                                                                                                                             
+        CloseCursorBRH_FPOS_MONTH();
+        
+        fprintf(fp, sFmt[4]);
+        fprintf(fp, sFmt[5],iCount,iAmtNum,dAmtTrans,dAmtFee);
+        fclose(fp);
+      }
+      /* fclose(fp); */
+      
+      CloseCursorTBL_BRH_INFO();
+      HtLog(StlmLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__,"报表结束END");
+      return 0;
+}

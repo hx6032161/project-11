@@ -1,0 +1,696 @@
+/*****************************************************************************/
+/*                TOPLINK+ -- Shanghai Huateng Software System Inc.          */
+/*****************************************************************************/
+/* PROGRAM NAME: Txn1581.c                                                 */
+/* DESCRIPTIONS: handle normal req from CUP and its rsp from host            */
+/*****************************************************************************/
+/*                             MODIFICATION LOG                              */
+/* DATE        PROGRAMMER     DESCRIPTION                                    */
+/*****************************************************************************/
+#include "Switch.h"
+
+void Txn1581RejRsp ( T_IpcIntTxnDef	*, Tbl_txn_Def *, int, int, char *);
+
+int Txn1581 (T_IpcIntTxnDef *ptIpcIntTxn, int nIndex )
+{
+	char			sFuncName[] = "Txn1581";
+	char			sRespCode[F039_LEN+1];
+	char			sMsgBuf[MSQ_MSG_SIZE_MAX];
+	int				nReturnCode;
+	int				nMsgLen;
+	T_SwtToReqDef	tSwtToReq;
+	Tbl_txn_Def		tTxn;
+	T_IpcIntTxnDef	tSendIpcIntTxn;
+	Tbl_card_route_Def CardRouteInf;
+	
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "%s begin", sFuncName);
+	memset ((char *)&tTxn ,' ',sizeof(tTxn));
+	/*******************
+	* 判断该交易是否支持
+	********************/
+	if (memcmp (gatTxnInf[nIndex].support_flag, FLAG_YES, 1) )
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"Transaction not supported. Reject this transaction with %s", F039_NOT_SUPPORT);
+		Txn1581RejRsp(ptIpcIntTxn,&tTxn,NNFalse,NNTrue,F039_NOT_SUPPORT);
+		return -1;
+	}
+
+	/***************
+	* 申请流水号
+	****************/
+	memset ((char *)&tSwtToReq, 0, sizeof(tSwtToReq) );
+	tSwtToReq.nToCtlTime = atoi (gatTxnInf[nIndex].msg_to );
+	if (tSwtToReq.nToCtlTime > 0)
+		tSwtToReq.nTransCode = TOCTL_NORMAL_FIRST;
+	else
+		tSwtToReq.nTransCode = TOCTL_REVERSAL_FIRST;
+	memcpy (tSwtToReq.sTxnDate, ptIpcIntTxn->sTransmsnDateTime, F007_LEN);
+	memcpy (tSwtToReq.sToReserved, gatTxnInf[nIndex].msg_dest1, SRV_ID_LEN);
+	
+	nReturnCode = ToCtrlReq (gsSrvId, gsSrvSeqId, gatSrvMsq, &tSwtToReq );
+	if (nReturnCode || tSwtToReq.nReplyCode == TOCTL_REPLY_CODE_NOT_OK)
+	{
+		HtDebugString(gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			(char *)&tSwtToReq, sizeof(tSwtToReq));
+
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"ToCtrlReq error, %d. Reject this transaction with %s", 
+			nReturnCode, F039_MAL_FUNCTION);
+
+		Txn1581RejRsp(ptIpcIntTxn,&tTxn,NNFalse,NNTrue,F039_MAL_FUNCTION);
+
+		return -1;
+	}
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "ToCtrlReq ok");
+
+	/* save ssn in ipc */
+	memcpy (ptIpcIntTxn->sSysSeqNum, tSwtToReq.sSysSeqNum, F011_LEN);
+	
+	nReturnCode = iMakeInfoFullness(ptIpcIntTxn);
+
+	/* 对key_rsp, key_revsal, key_cancel赋值 */
+	nReturnCode = SetKeyRsp (ptIpcIntTxn);
+	nReturnCode = SetKeyRevsal (ptIpcIntTxn);
+	nReturnCode = SetKeyCancel (ptIpcIntTxn);
+	/***********************
+	* 组织记录数据库记录结构
+	************************/
+	nReturnCode = MoveIpc2Txn (ptIpcIntTxn, &tTxn);
+	if( nReturnCode )
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"MoveIpc2Txn error, %d. Reject this transaction with %s", 
+			nReturnCode, F039_MAL_FUNCTION);
+	
+		/* 解除超时控制 */	
+		tSwtToReq.nTransCode = TOCTL_NORMAL_SECOND;
+		nReturnCode = ToCtrlReq (gsSrvId, gsSrvSeqId, gatSrvMsq, &tSwtToReq );
+
+		Txn1581RejRsp(ptIpcIntTxn,&tTxn,NNFalse,NNTrue,F039_MAL_FUNCTION);
+
+		return -1;
+	}
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "MoveIpc2Txn ok");
+	/***************
+	* 转换PIN 
+	****************/
+    if (gatTxnInf[nIndex].pin_flag[0] == FLAG_YES_C )
+	{
+		nReturnCode = TransferPin (ptIpcIntTxn );
+		if (nReturnCode)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+				"TransferPin error, %d. Reject this transaction with %s", 
+				nReturnCode, F039_PIN_ERROR);
+
+			/* 解除超时控制 */
+			tSwtToReq.nTransCode = TOCTL_NORMAL_SECOND;
+			nReturnCode = ToCtrlReq (gsSrvId, gsSrvSeqId, gatSrvMsq, &tSwtToReq );
+	
+			Txn1581RejRsp(ptIpcIntTxn,&tTxn,NNTrue,NNTrue,F039_PIN_ERROR);
+
+			return -1;
+		}
+	}
+	
+	/*******************
+	* 其他客户化的检查
+	********************/
+	nReturnCode = SwtCustCheckTxn (ptIpcIntTxn, sRespCode);
+	if (nReturnCode || memcmp (sRespCode, F039_SUCCESS, F039_LEN))
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"SwtCustCheckTxn error, %d. Reject this transaction with %2.2s", 
+			nReturnCode, sRespCode);
+
+		/* 解除超时控制 */	
+		tSwtToReq.nTransCode = TOCTL_NORMAL_SECOND;
+		nReturnCode = ToCtrlReq (gsSrvId, gsSrvSeqId, gatSrvMsq, &tSwtToReq );
+
+		Txn1581RejRsp(ptIpcIntTxn,&tTxn,NNTrue,NNTrue,sRespCode);
+
+		return -1;
+	}
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "SwtCustCheckTxn ok");
+	/*********************
+	* 客户化数据库记录结构
+	**********************/
+	nReturnCode = SwtCustBeforeTblTxnOpr (ptIpcIntTxn, &tTxn, NULL);
+	if (nReturnCode)
+	{
+		if(ptIpcIntTxn->sRespCode[0] == ' ' || ptIpcIntTxn->sRespCode[0] == 0)
+			memcpy(ptIpcIntTxn->sRespCode, F039_MAL_FUNCTION, F039_LEN);
+
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"SwtCustBeforeTblTxnOpr error, %d. Reject this transaction with %2.2s", 
+			nReturnCode, ptIpcIntTxn->sRespCode);
+
+		/* 解除超时控制 */	
+		tSwtToReq.nTransCode = TOCTL_NORMAL_SECOND;
+		nReturnCode = ToCtrlReq (gsSrvId, gsSrvSeqId, gatSrvMsq, &tSwtToReq );
+
+		Txn1581RejRsp(ptIpcIntTxn,&tTxn,NNTrue,NNTrue,ptIpcIntTxn->sRespCode);
+
+		return -1;
+	}
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "SwtCustBeforeTblTxnOpr ok");
+	
+	DbsBegin ();
+	/***************
+	* 记录数据库
+	****************/
+	  nReturnCode = DbsTxn (DBS_INSERT, &tTxn);
+	  if (nReturnCode )
+	  {
+	  	DbsRollback ();
+	  	HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+	  		"DbsTxn insert error, %d. Reject this transaction with %s", 
+	  		nReturnCode, F039_MAL_FUNCTION);
+    
+	  	/* 解除超时控制 */	
+	  	tSwtToReq.nTransCode = TOCTL_NORMAL_SECOND;
+	  	nReturnCode = ToCtrlReq (gsSrvId, gsSrvSeqId, gatSrvMsq, &tSwtToReq );
+    
+	  	Txn1581RejRsp(ptIpcIntTxn,&tTxn,NNFalse,NNTrue,F039_DUPL_TXN);
+	  	
+	  	return -1;
+	  }
+	  DbsCommit ();
+	  
+	  HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "Insert transaction into database");
+	/***********************
+	*  客户化目标IPC报文内容
+	************************/
+	memcpy ((char *)&tSendIpcIntTxn, (char *)ptIpcIntTxn, sizeof (*ptIpcIntTxn));
+	memcpy( tSendIpcIntTxn.sMsgDestId, gatTxnInf[nIndex].msg_dest1, SRV_ID_LEN );
+
+	nReturnCode = SendMsg (&tSendIpcIntTxn, &tTxn, NULL);
+	if (nReturnCode)
+	{
+		if(tSendIpcIntTxn.sRespCode[0] == ' ' || tSendIpcIntTxn.sRespCode[0] == 0)
+			memcpy(tSendIpcIntTxn.sRespCode, F039_MAL_FUNCTION, F039_LEN);
+
+		memcpy(ptIpcIntTxn->sHostTransFee1, tSendIpcIntTxn.sHostTransFee1, F038_LEN);
+
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"SendMsg error, %d. Reject this transaction with %2.2s", 
+			nReturnCode, tSendIpcIntTxn.sRespCode);
+
+		/* 解除超时控制 */	
+		tSwtToReq.nTransCode = TOCTL_NORMAL_SECOND;
+		nReturnCode = ToCtrlReq (gsSrvId, gsSrvSeqId, gatSrvMsq, &tSwtToReq );
+
+		Txn1581RejRsp(ptIpcIntTxn,&tTxn,NNFalse,NNTrue,tSendIpcIntTxn.sRespCode);
+
+		DbsBegin ();
+
+		memcpy (tTxn.trans_state, TRANS_STATE_REJ_BY_FE, FLD_TRANS_STATE_LEN);
+		memcpy (tTxn.resp_code, tSendIpcIntTxn.sRespCode, F039_LEN);
+		nReturnCode = DbsTxn (DBS_UPDATE1, &tTxn);
+		if (nReturnCode)
+		{
+			DbsRollback ();
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+				"DbsTxn DBS_UPDATE1 error, %d", nReturnCode);
+			return -1;
+		}
+
+		DbsCommit ();
+		
+		return -1;
+	}
+	return 0;
+}
+
+int Txn1582 (T_IpcIntTxnDef *ptIpcIntTxn, int nIndex )
+{
+	char			sFuncName[] = "Txn1582";
+	char			sMsgSrcId[SRV_ID_LEN+1];
+	char			sMsgBuf[MSQ_MSG_SIZE_MAX];
+	int				nReturnCode;
+	int				nMsgLen;
+	int				nSendRevsalFlag;
+	int				nSendRspFlag;
+	int				nSendAccountFlag;
+	int				nReqIndex;
+	T_SwtToReqDef	tSwtToReq;
+	Tbl_txn_Def		tTxn;
+	T_IpcIntTxnDef	tSendIpcIntTxn, tSendIpcInt2;
+	
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "%s begin", sFuncName);
+	HtDebugString(gsLogFile,HT_LOG_MODE_NORMAL, __FILE__,__LINE__,(char *)&ptIpcIntTxn,sizeof(T_IpcIntTxnDef));
+	
+	memset (sMsgSrcId, 0, sizeof (sMsgSrcId));
+	memcpy (sMsgSrcId, ptIpcIntTxn->sMsgSrcId, SRV_ID_LEN);
+	
+	
+	/****************************
+	* 查找tbl_txn中的交易记录
+	****************************/
+	nReturnCode = SetKeyRsp (ptIpcIntTxn);
+	memset ((char *)&tTxn, 0, sizeof (tTxn));
+	memcpy (tTxn.msg_src_id, ptIpcIntTxn->sMsgSrcId, SRV_ID_LEN);
+	memcpy (tTxn.key_rsp, ptIpcIntTxn->sKeyRsp, KEY_RSP_LEN);
+	
+	/* 在数据库中查找原请求交易 */
+	nReturnCode = DbsTxn (DBS_SELECT21, &tTxn);
+	if (nReturnCode)
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"DbsTxn select error, %d. txn_num = %4.4s,key_rsp = %48.48s Discard this message", 
+			nReturnCode,tTxn.txn_num,tTxn.key_rsp);
+		return -1;
+	}
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "DbsTxn select ok");
+	/***********************
+	* 查找交易请求在gatTxnInf中的索引
+	************************/
+	nReturnCode = GetTxnInfoIndex (tTxn.msg_src_id, tTxn.txn_num, tTxn.msg_dest_id, &nReqIndex );
+	if (nReturnCode || nReqIndex < 0)
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"GetTxnInfoIndex error %d, nIndex %d. Discard this message", nReturnCode, nReqIndex);
+		return -1;
+	}
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "GetTxnInfoIndex ok");
+	/***********************
+	* 设置处理异常时是否要发送冲正
+	************************/
+	switch (gatTxnInf[nReqIndex].rsp_type[0])
+	{
+	case RSP_TYPE_NO_ACCOUNT:
+		if (IsRspSuccess (ptIpcIntTxn->sRespCode) )
+			nSendRevsalFlag = 1;
+		else
+			nSendRevsalFlag = 0;
+		break;
+	default:
+		break;
+	}
+	
+	if( memcmp(ptIpcIntTxn->sMisc2,"AAAAAAA",7)== 0 )
+	{
+		memcpy(ptIpcIntTxn->sRespCode,F039_SUCCESS,2);/*IPP成功应答*/
+	}
+    else if(memcmp(ptIpcIntTxn->sMisc2,"BBBBBBB",7)== 0)
+	{
+		memcpy(ptIpcIntTxn->sRespCode,F039_ORIG_TXN_NOT_FOUND,2);/*IPP未找到原交易*/
+	}else
+    {
+		memcpy(ptIpcIntTxn->sRespCode,F039_MAL_FUNCTION,2);/*IPP失败*/
+		memcpy(ptIpcIntTxn->sAddtnlDataPrivateLen,"062",3);
+		memcpy(ptIpcIntTxn->sAddtnlDataPrivate,ptIpcIntTxn->sMisc2,62);
+	}
+	
+	/***********************
+	* 组织记录数据库记录结构
+	************************/
+	nReturnCode = MoveIpc2Txn (ptIpcIntTxn, &tTxn);
+	if( nReturnCode )
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"MoveIpc2Txn error, %d. Discard this message", nReturnCode);
+		return -1;
+	}
+	if(tTxn.authr_id_r[0] !=' ' && tTxn.authr_id_r[0] != 0x00)
+		memcpy (tTxn.authr_id_resp, tTxn.authr_id_r, F038_LEN);
+	/*********************
+	* 客户化数据库记录结构
+	**********************/
+	nReturnCode = SwtCustBeforeTblTxnOpr (ptIpcIntTxn, &tTxn, NULL);
+	if (nReturnCode)
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"SwtCustBeforeTblTxnOpr error, %d. Discard this message", nReturnCode);
+		return -1;
+	}
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "SwtCustBeforeTblTxnOpr ok");
+	/* 将tTxn保存到tSendIpcIntTxn, 供发送应答报文使用 */
+	nReturnCode = MoveTxn2Ipc (&tTxn, &tSendIpcIntTxn);
+	if( nReturnCode )
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"MoveTxn2Ipc error, %d. Discard this message", nReturnCode);
+		return -1;
+	}
+	if(memcmp(ptIpcIntTxn->sTxnNum,"1122",4)==0
+		||memcmp(ptIpcIntTxn->sTxnNum,"1172",4)==0
+		||memcmp(ptIpcIntTxn->sTxnNum,"1112",4)==0)
+	{
+		memcpy(tSendIpcIntTxn.sAddtnlDataLen,ptIpcIntTxn->sAddtnlDataLen,F057_LEN_LEN);
+		memcpy(tSendIpcIntTxn.sAddtnlData,ptIpcIntTxn->sAddtnlData,F057_VAL_LEN);
+		HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "tSendIpcIntTxn.sAddtnlData %.34s",tSendIpcIntTxn.sAddtnlData);
+		HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "tSendIpcIntTxn.sAddtnlDataLen %.3s",tSendIpcIntTxn.sAddtnlDataLen);		
+	}
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "MoveTxn2Ipc ok");
+
+	/* 转发的应答报文里的38域使用发卡方应答中的38域 */
+	if (ptIpcIntTxn->cF038Ind == FLAG_YES_C)
+	{
+		tSendIpcIntTxn.cF038Ind = FLAG_YES_C;
+		memcpy (tSendIpcIntTxn.sAuthrIdResp, ptIpcIntTxn->sAuthrIdResp, F038_LEN);
+	}
+	else
+		tSendIpcIntTxn.cF038Ind = FLAG_NO_C;
+
+
+	/***************
+	* 检查交易是否超时
+	****************/
+	memset ((char *)&tSwtToReq, 0, sizeof(tSwtToReq) );
+	tSwtToReq.nTransCode = TOCTL_NORMAL_SECOND;
+	tSwtToReq.nToCtlTime = atoi (gatTxnInf[nReqIndex].msg_to );
+	memcpy (tSwtToReq.sTxnDate, tTxn.trans_date_time, F007_LEN);
+	memcpy (tSwtToReq.sSysSeqNum, tTxn.sys_seq_num, FLD_SYS_SEQ_NUM_LEN );
+	tSwtToReq.nReplyCode = TOCTL_REPLY_CODE_NOT_TO;
+
+	/* 对先记账再回前段应答的情况, 在收到银联成功应答时不解超时, 收到主机记帐应答后再解超时 */
+	switch (gatTxnInf[nReqIndex].rsp_type[0])
+	{
+	case RSP_TYPE_NO_ACCOUNT:
+	case RSP_TYPE_RSP_BEFORE_ACCOUNT:
+		nReturnCode = ToCtrlReq (gsSrvId, gsSrvSeqId, gatSrvMsq, &tSwtToReq );
+		if (nReturnCode || tSwtToReq.nReplyCode == TOCTL_REPLY_CODE_NOT_OK)
+		{
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+				"ToCtrlReq error, %d. Discard this message", nReturnCode);
+			return -1;
+		}
+	
+		break;
+	case RSP_TYPE_RSP_AFTER_ACCOUNT:
+		if (memcmp (sMsgSrcId, SRV_ID_COMM_CUP, SRV_ID_LEN) ||
+			!IsRspSuccess (ptIpcIntTxn->sRespCode))
+		{
+			nReturnCode = ToCtrlReq (gsSrvId, gsSrvSeqId, gatSrvMsq, &tSwtToReq );
+			if (nReturnCode || tSwtToReq.nReplyCode == TOCTL_REPLY_CODE_NOT_OK)
+			{
+				HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+					"ToCtrlReq error, %d. Discard this message", nReturnCode);
+				return -1;
+			}
+		}
+		else
+		{
+			if (!memcmp (tTxn.trans_state, TRANS_STATE_NO_RSP, FLD_TRANS_STATE_LEN))
+				tSwtToReq.nReplyCode = TOCTL_REPLY_CODE_NOT_TO;
+			else
+				tSwtToReq.nReplyCode = TOCTL_REPLY_CODE_HAD_TO;
+		}
+		
+		break;
+	default:
+		break;
+	}
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "ToCtrlReq ok");
+
+	/* set trans state if reply is not time out */
+	if (tSwtToReq.nReplyCode == TOCTL_REPLY_CODE_NOT_TO)
+	{                                              
+		if (IsRspSuccess (ptIpcIntTxn->sRespCode))
+		{
+			switch (gatTxnInf[nReqIndex].rsp_type[0])
+			{
+			case RSP_TYPE_NO_ACCOUNT:
+				memcpy (tTxn.trans_state, TRANS_STATE_SUCC, FLD_TRANS_STATE_LEN);
+				break;
+			case RSP_TYPE_RSP_BEFORE_ACCOUNT:
+				if (!memcmp (sMsgSrcId, SRV_ID_COMM_CUP, SRV_ID_LEN))
+					memcpy (tTxn.trans_state, TRANS_STATE_SUCC, FLD_TRANS_STATE_LEN);
+				break;
+			case RSP_TYPE_RSP_AFTER_ACCOUNT:
+				if (!memcmp (sMsgSrcId, SRV_ID_COMM_CUP, SRV_ID_LEN))
+					memcpy (tTxn.trans_state, TRANS_STATE_NO_ACCT_RSP, FLD_TRANS_STATE_LEN);
+				else
+					memcpy (tTxn.trans_state, TRANS_STATE_SUCC, FLD_TRANS_STATE_LEN);
+				break;
+			default:
+				break;
+			}
+		}
+		else
+		{
+			if (!memcmp (sMsgSrcId, SRV_ID_COMM_CUP, SRV_ID_LEN))
+				memcpy (tTxn.trans_state, TRANS_STATE_REJ_BY_CUPS, FLD_TRANS_STATE_LEN);
+			else
+				memcpy (tTxn.trans_state, TRANS_STATE_REJ_BY_HOST, FLD_TRANS_STATE_LEN);
+		}
+	}
+	
+	DbsBegin ();
+
+
+	/***************
+	* 记录数据库
+	****************/
+	nReturnCode = DbsTxn (DBS_UPDATE1, &tTxn);
+	if (nReturnCode )
+	{
+		DbsRollback ();
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"DbsTxn update error, %d. Discard this message", nReturnCode);
+
+		/* send reversal on success reply */
+		if (nSendRevsalFlag)
+		{
+			nReturnCode = SendRevsalOnError (&tSendIpcIntTxn, nReqIndex, REASON_CODE_SEND_ERR);
+			if (nReturnCode)
+			{
+				HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "SendRevsalOnError error, %d", nReturnCode);
+			}
+		}
+		return -1;
+	}
+
+	DbsCommit ();
+
+	HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "DbsTxn update ok");
+
+	if (tSwtToReq.nReplyCode == TOCTL_REPLY_CODE_HAD_TO)
+	{
+		/* 超时应答 */
+		/* send reversal on late success reply */
+		HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "Received late response");
+		if (nSendRevsalFlag)
+		{
+			nReturnCode = SendRevsalOnError (&tSendIpcIntTxn, nReqIndex, REASON_CODE_LATE_RSP);
+			if (nReturnCode)
+			{
+				HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "SendRevsalOnError error, %d", nReturnCode);
+			}
+			HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "Reversal for late successful response sent out");
+		}
+	}
+	else
+	{
+		/* 应答未超时 */
+		/* 是否转发应答 */
+		nSendRspFlag = 0;
+		switch (gatTxnInf[nReqIndex].rsp_type[0])
+		{
+		case RSP_TYPE_NO_ACCOUNT:
+			nSendRspFlag = 1;
+			break;
+		case RSP_TYPE_RSP_BEFORE_ACCOUNT:
+			if (!memcmp (sMsgSrcId, SRV_ID_COMM_CUP, SRV_ID_LEN))
+				nSendRspFlag = 1;
+			else
+				nSendRspFlag = 0;
+			break;
+		case RSP_TYPE_RSP_AFTER_ACCOUNT:
+			if (!memcmp (sMsgSrcId, SRV_ID_COMM_CUP, SRV_ID_LEN) &&
+						IsRspSuccess (ptIpcIntTxn->sRespCode))
+				nSendRspFlag = 0;
+			else
+				nSendRspFlag = 1;
+			break;
+		default:
+			break;
+		}
+
+		if (nSendRspFlag)
+		{
+			/***********************
+			*  客户化目标IPC报文内容
+			************************/	
+	    				
+			memcpy ((char *)&tSendIpcInt2, (char *)&tSendIpcIntTxn, sizeof (tSendIpcIntTxn));
+			
+			/* 更改应答交易代码 */
+			memcpy( tSendIpcInt2.sTxnNum, gatTxnInf[nReqIndex].rsp_txn_num, FLD_TXN_NUM_LEN );
+		
+			/* 更改应答SrvId */
+			memcpy( tSendIpcInt2.sMsgSrcId, sMsgSrcId, SRV_ID_LEN );
+			memcpy( tSendIpcInt2.sMsgDestId, tTxn.msg_src_id, SRV_ID_LEN );
+			
+			/* 更改应答 msg type */
+			tSendIpcInt2.sMsgType[2]++;
+
+			nReturnCode = SendMsg (&tSendIpcInt2, &tTxn, NULL);
+			if (nReturnCode)
+			{
+				HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+					"SendMsg error, %d. Discard this message %s", nReturnCode,strerror(errno));
+					
+				/* send reversal on success reply */
+				/*if (nSendRevsalFlag)
+				{
+					nReturnCode = SendRevsalOnError (&tSendIpcIntTxn, nReqIndex, REASON_CODE_SEND_ERR);
+					if (nReturnCode)
+					{
+						HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "SendRevsalOnError error, %d", nReturnCode);
+					}
+				}*/
+				
+				return -1;
+			}
+		
+			HtLog(	gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "Transaction reply sent out");
+		}
+
+		/* 是否发记账 */
+		nSendAccountFlag = 0;
+		switch (gatTxnInf[nReqIndex].rsp_type[0])
+		{
+		case RSP_TYPE_NO_ACCOUNT:
+			nSendAccountFlag = 0;
+			break;
+		case RSP_TYPE_RSP_BEFORE_ACCOUNT:
+			if (!memcmp (sMsgSrcId, SRV_ID_COMM_CUP, SRV_ID_LEN) &&
+					IsRspSuccess (ptIpcIntTxn->sRespCode))
+				nSendAccountFlag = 1;
+			else
+				nSendAccountFlag = 0;
+			break;
+		case RSP_TYPE_RSP_AFTER_ACCOUNT:
+			if (!memcmp (sMsgSrcId, SRV_ID_COMM_CUP, SRV_ID_LEN) &&
+					IsRspSuccess (ptIpcIntTxn->sRespCode))
+				nSendAccountFlag = 1;
+			else
+				nSendAccountFlag = 0;
+			break;
+		default:
+			break;
+		}
+
+		if (nSendAccountFlag)
+		{
+			/* 更改应答SrvId */
+			memcpy ((char *)&tSendIpcInt2, &tSendIpcIntTxn, sizeof (tSendIpcIntTxn));
+			memcpy( tSendIpcInt2.sMsgDestId, gatTxnInf[nReqIndex].msg_dest2, SRV_ID_LEN );
+			/* clear F038 */
+			tSendIpcInt2.cF038Ind = FLAG_NO_C;
+			/* clear F039 */
+			memset (tSendIpcInt2.sRespCode, ' ', F039_LEN);
+			
+			nReturnCode = SendMsg (&tSendIpcInt2, &tTxn, NULL);
+			if (nReturnCode)
+			{
+				HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+					"SendMsg error, %d. Discard this message", nReturnCode);
+			}
+			else
+			{
+				HtLog(	gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "Transaction account request sent out");
+			}
+
+			nReturnCode = InsertSafMsg (&tSendIpcInt2, &tTxn, gatTxnInf[nReqIndex].saf_count2);
+			if (nReturnCode)
+			{
+				HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__, __LINE__, "InsertSafMsg error, %d", nReturnCode);
+			}
+			HtLog (gsLogFile, HT_LOG_MODE_NORMAL, __FILE__, __LINE__, "InsertSafMsg ok");
+		}
+		
+		/* 是否需要因失败的记账应答向银联发送冲正 */
+		nSendRevsalFlag = 0;
+		switch (gatTxnInf[nReqIndex].rsp_type[0])
+		{
+		case RSP_TYPE_NO_ACCOUNT:
+			nSendRevsalFlag = 0;
+			break;
+		case RSP_TYPE_RSP_BEFORE_ACCOUNT:
+			nSendRevsalFlag = 0;
+			break;
+		case RSP_TYPE_RSP_AFTER_ACCOUNT:
+			if (!memcmp (sMsgSrcId, SRV_ID_COMM_CUP, SRV_ID_LEN) || IsRspSuccess (ptIpcIntTxn->sRespCode))
+				nSendRevsalFlag = 0;
+			else
+				nSendRevsalFlag = 1;
+			break;
+		default:
+			break;
+		}
+
+		if (nSendRevsalFlag)
+		{
+			nReturnCode = SendRevsalOnError (&tSendIpcIntTxn, nReqIndex, REASON_CODE_SEND_ERR);
+			if (nReturnCode)
+			{
+				HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+					"SendRevsalOnError error, %d. Discard this message", nReturnCode);
+				return -1;
+			}
+			HtLog(	gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "Transaction reversal request sent out");
+		}
+		
+	}
+	HtLog(	gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "%d end",nSendRevsalFlag);
+	HtLog(	gsLogFile, HT_LOG_MODE_NORMAL, __FILE__,__LINE__, "%s end", sFuncName);
+	return 0;
+}
+
+void Txn1581RejRsp (
+		T_IpcIntTxnDef		*ptIpcIntTxn, 
+		Tbl_txn_Def 		*ptTxn, 		
+		int 				nTxnNeed,
+		int 				nRspNeed,
+		char				*psaRspCode)
+{
+	int		nReturnCode;
+
+	memcpy( ptIpcIntTxn->sRespCode, psaRspCode, F039_LEN );	
+	memcpy( ptIpcIntTxn->sTransState, TRANS_STATE_REJ_BY_FE, FLD_TRANS_STATE_LEN);	
+
+	if(nTxnNeed)
+	{
+		DbsBegin ();
+
+		/* memset (ptTxn->amt_trans_fee, 0x00, sizeof(ptTxn->amt_trans_fee)); */
+		memcpy (ptTxn->trans_state, TRANS_STATE_REJ_BY_FE, FLD_TRANS_STATE_LEN);
+		memcpy (ptTxn->resp_code, ptIpcIntTxn->sRespCode, F039_LEN);
+
+		nReturnCode = DbsTxn (DBS_INSERT, ptTxn);
+		if (nReturnCode)
+		{
+			DbsRollback ();
+			HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "DbsTxn insert error, %d", nReturnCode);
+			return;
+		}
+		DbsCommit ();
+	}
+
+	if(!nRspNeed)
+		return;
+
+	ptIpcIntTxn->sMsgType[2]++;
+	ptIpcIntTxn->sTxnNum[3]++;
+
+	memcpy( ptIpcIntTxn->sMsgDestId, ptIpcIntTxn->sMsgSrcId, SRV_ID_LEN );
+
+	/* clear F038 */
+	ptIpcIntTxn->cF038Ind = FLAG_NO_C;
+
+	/* clear F090 */
+	memset (ptIpcIntTxn->sOrigDataElemts, ' ', F090_LEN);
+
+	nReturnCode = SendMsg (ptIpcIntTxn, ptTxn, NULL);
+	if (nReturnCode)
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, "SendMsg error, %d", nReturnCode);
+		return;
+	}
+
+	return;
+}

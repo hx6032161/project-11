@@ -1,0 +1,98 @@
+/*****************************************************************************/
+/*                NCUP -- Shanghai Huateng Software System Inc.              */
+/*****************************************************************************/
+/* PROGRAM NAME: DbsSrvInf.pc                                                */
+/* DESCRIPTIONS:                                                             */
+/*****************************************************************************/
+/*                             MODIFICATION LOG                              */
+/* DATE        PROGRAMMER     DESCRIPTION                                    */
+/*                                                                           */
+/*****************************************************************************/
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+#include "DbsDef.h"
+#include "pos_stlm.h"
+
+EXEC SQL BEGIN DECLARE SECTION;
+struct  TBL_srv_inf_Def
+{
+        long    usage_key;
+	char	srv_id[5];
+	char	srv_name[9];
+	char	msq_int_id[3];
+	char	srv_num[3];
+	char	relate_srv_id[33];
+	char	srv_dsp[65];
+} ltTblSrvInf;
+EXEC SQL END DECLARE SECTION;
+
+int DbsSRVINF( int vnOprType, tbl_srv_inf_def *vtpTblSrvInf) 
+{
+
+    memcpy(
+       &ltTblSrvInf,
+       vtpTblSrvInf,
+       sizeof(ltTblSrvInf));
+    switch(vnOprType) {
+    case DBS_SELECT:
+        EXEC SQL SELECT
+            usage_key,
+            srv_name,
+            msq_int_id,
+            srv_num,
+            relate_srv_id
+	INTO
+            :ltTblSrvInf.usage_key,
+            :ltTblSrvInf.srv_name,
+            :ltTblSrvInf.msq_int_id,
+            :ltTblSrvInf.srv_num,
+            :ltTblSrvInf.relate_srv_id
+        FROM 
+            tbl_srv_inf
+        WHERE 
+            usage_key = :ltTblSrvInf.usage_key
+          AND    
+            srv_id = :ltTblSrvInf.srv_id;
+    memcpy(
+       vtpTblSrvInf,
+       &ltTblSrvInf,
+       sizeof(ltTblSrvInf));    
+    if (sqlca.sqlcode == -1405) sqlca.sqlcode = 0;        
+        return sqlca.sqlcode;
+    case DBS_OPEN:
+        EXEC SQL DECLARE tbl_srv_inf_cur CURSOR FOR
+                      select usage_key,
+                             srv_id,
+                             srv_name, 
+                             msq_int_id,
+                             srv_num,
+                             relate_srv_id
+                        from tbl_srv_inf 
+                        where usage_key =:ltTblSrvInf.usage_key;
+
+             EXEC SQL OPEN tbl_srv_inf_cur;
+             return sqlca.sqlcode;
+
+        case DBS_FETCH:
+             EXEC SQL FETCH tbl_srv_inf_cur 
+                       into :ltTblSrvInf.usage_key,
+                            :ltTblSrvInf.srv_id,
+                            :ltTblSrvInf.srv_name,
+                            :ltTblSrvInf.msq_int_id,
+                            :ltTblSrvInf.srv_num,
+                            :ltTblSrvInf.relate_srv_id;
+             memcpy(
+               vtpTblSrvInf,
+               &ltTblSrvInf,
+               sizeof(ltTblSrvInf));            
+             if (sqlca.sqlcode == -1405) sqlca.sqlcode = 0;
+             return sqlca.sqlcode;
+
+        case DBS_CLOSE:
+             EXEC SQL CLOSE tbl_srv_inf_cur;
+             return sqlca.sqlcode;           
+    default:
+        return -1; 
+    } /* end of switch */
+} /* end of DbsSRVINF */

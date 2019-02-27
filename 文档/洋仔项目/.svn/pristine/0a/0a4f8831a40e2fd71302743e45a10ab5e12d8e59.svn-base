@@ -1,0 +1,119 @@
+DROP view viw_mcht_txn;
+CREATE VIEW VIW_MCHT_TXN
+   ( STLM_DATE, 
+     TXN_TYPE,
+     BRH_CD,
+     MCHT_CD,
+     MCHT_NM,     
+     MCHT_STLM_ACCT, 
+     MCHT_STLM_NM,
+     MCHT_STLM_INS_NM, 
+     NORMAL_NUM, 
+     NORMAL_AMT, 
+     NORMAL_FEE, 
+     NORMAL_AMT_0,
+     NORMAL_AMT_1,
+     NORMAL_AMT_CUPS,
+     NORMAL_AMT_BANK
+   ) 
+AS
+   SELECT 
+       A.date_settlmt, 
+       '1' as txn_type,
+       A.BRH_INS_ID_CD,  
+       A.MCHT_CD, 
+       C.MCHT_NM,
+       B.settle_ACCT,
+       B.settle_acct_nm,
+       B.settle_bank_nm, 
+       SUM (A.stlm_num_d + A.stlm_num_c) AS NORMAL_NUM, 
+       SUM ( A.mcht_at_c - A.mcht_at_d) AS NORMAL_AMT, 
+       SUM ( A.mcht_fee_d - A.mcht_fee_c ) AS NORMAL_FEE, 
+       SUM ( CASE WHEN A.T_0_FLAG= '1' THEN 
+                 A.mcht_at_c - A.mcht_at_d - A.mcht_fee_d + A.mcht_fee_c 
+             ELSE 0 END ) AS NORMAL_AMT_0,
+       SUM ( CASE WHEN A.T_0_FLAG= '0' THEN 
+                 A.mcht_at_c - A.mcht_at_d - A.mcht_fee_d + A.mcht_fee_c 
+             ELSE 0 END ) AS NORMAL_AMT_1,
+       SUM(cups_file_fee_d - cups_file_fee_c) AS NORMAL_AMT_CUPS,
+       SUM ( acq_ins_allot_c - acq_ins_allot_d ) AS NORMAL_AMT_BANK 
+ FROM tbl_term_algo_sum A 
+ inner join tbl_mcht_settle_inf B ON  ( B.MCHT_NO    = A.MCHT_CD )
+ INNER JOIN TBL_MCHT_BASE_INF C ON ( A.MCHT_CD = C.MCHT_NO ) 
+ GROUP BY A.date_settlmt,
+       1,
+       A.BRH_ins_id_CD, 
+       A.MCHT_CD, 
+       c.mcht_nm,
+       B.settle_ACCT,
+       B.settle_acct_nm,
+       B.settle_bank_nm
+union all
+	 select
+	   substr(A.start_time, 1,8),
+	   '2' as txn_type,
+	   C.BANK_NO,
+	   A.MCHNT_NO,
+	   C.MCHT_NM,
+	   B.settle_ACCT,
+	   B.settle_acct_nm,
+	   B.settle_bank_nm,
+	   count(*) AS NORMAL_NUM,
+	   SUM ( case when A.cd_flag ='1' then
+		     to_number(amt1)/100
+		 else 
+		     0 - to_number(amt1)/100
+		 end ) AS NORMAL_AMT,
+	   SUM ( case when A.cd_flag ='1' then
+                     0 - to_number(fee1)/100
+		 else 
+		     to_number(fee1)/100
+		 end ) AS NORMAL_FEE,
+	   0,
+	   SUM ( CASE WHEN A.cd_flag= '1' THEN
+	            to_number(amt1)/100 - to_number(fee1)/100
+		ELSE 
+                    to_number(fee1)/100 - to_number(amt1)/100
+		END ) AS NORMAL_AMT_1,
+	   0,
+           0
+   FROM bth_err_regist_txn A
+   inner join tbl_mcht_settle_inf B ON  ( B.MCHT_NO    = A.MCHNT_NO )
+   inner join TBL_MCHT_BASE_INF C ON ( A.MCHNT_NO = C.MCHT_NO )
+   GROUP BY substr(A.start_time, 1, 8),
+	    2,
+            C.BANK_NO,
+            A.MCHNT_NO,                                                                                               
+            C.mcht_nm,
+            B.settle_ACCT,
+	    B.settle_acct_nm,
+	    B.settle_bank_nm
+union SELECT
+       A.date_settlmt,
+       '3' as txn_type,
+       A.BRH_INS_ID_CD,
+       A.MCHT_CD,
+       C.MCHT_NM,
+       B.settle_ACCT,
+       B.settle_acct_nm,
+       B.settle_bank_nm,
+       SUM (A.stlm_num_d + A.stlm_num_c) AS NORMAL_NUM,
+       SUM ( A.mcht_at_c - A.mcht_at_d) AS NORMAL_AMT,
+       SUM ( A.mcht_fee_d - A.mcht_fee_c ) AS NORMAL_FEE,
+        0,
+        0,
+       SUM(cups_file_fee_d - cups_file_fee_c) AS NORMAL_AMT_CUPS,
+       SUM ( acq_ins_allot_c - acq_ins_allot_d ) AS NORMAL_AMT_BANK
+ FROM tbl_term_algo_sum_stlm A
+ inner join tbl_mcht_settle_inf B ON  ( B.MCHT_NO    = A.MCHT_CD )
+ INNER JOIN TBL_MCHT_BASE_INF C ON ( A.MCHT_CD = C.MCHT_NO )
+ GROUP BY A.date_settlmt,
+       3,
+       A.BRH_ins_id_CD,
+       A.MCHT_CD,
+       c.mcht_nm,
+       B.settle_ACCT,
+       B.settle_acct_nm,
+       B.settle_bank_nm;
+
+

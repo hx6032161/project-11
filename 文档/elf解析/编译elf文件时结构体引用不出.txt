@@ -1,0 +1,4 @@
+编译时遇到dereferencing pointer to incomplete type
+     printf("%02x ",Elf_header->e_ident[MagNum]);的问题
+
+解决：定义结构体指针时 去掉struct  直接用别名定义

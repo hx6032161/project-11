@@ -1,0 +1,95 @@
+/*
+ *  Copyright 2006, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  $Id: gendbsvr.c,v 1.2 2007/06/21 03:39:40 centerfe Exp $
+ *
+ *  功能: 表tbl_txn_name基本操作函数
+ *
+ *  Edit History:
+ *
+ *    2011/07/07 -gendb
+ */
+ 
+#include "db.h"
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+#define MODULE_NAME "tbl_txn_name.pc"
+#define TABLE_NAME "TBL_TXN_NAME"
+
+typedef struct {
+	char txn_num[4+1];
+	char txn_name[30+1];
+	char txn_dsp[60+1];
+	char dc_flag[1+1];
+} TBL_TXN_NAME_Def;
+
+typedef struct {
+	short txn_num_ind;
+	short txn_name_ind;
+	short txn_dsp_ind;
+	short dc_flag_ind;
+} TBL_TXN_NAME_IND_Def;
+
+#define SQL_CODE_CHECK(a) \
+        if ((ret_code = ProcSQLCode(KeyText,MODULE_NAME,a))\
+                !=SUCCESS) return ret_code 
+
+#define GET_TRC_MSG()\
+        sprintf(KeyText, "%s: ", TABLE_NAME)
+/*************************************************************************/
+/*    input : DBS_FUNC   the dbs func                                    */
+/*                       DBS_INIT                                        */
+/*                       DBS_SELECT                                      */
+/*                       DBS_LOCK                                        */
+/*                       DBS_UPDATE                                      */
+/*                       DBS_INSERT                                      */
+/*                       DBS_DELETE                                      */
+/*                   The struct pointer defined in db.h.                 */
+/*         return : the sqlca.sqlcode                                    */
+/*************************************************************************/
+
+int OpenCursorTBL_TXN_NAME(char* sSqlBuf)
+{
+    EXEC SQL PREPARE select_txn from :sSqlBuf;
+    if(sqlca.sqlcode!=0)
+    {
+        return sqlca.sqlcode;
+    }
+    EXEC SQL DECLARE txn_cursor_TBL_TXN_NAME CURSOR FOR select_txn;
+    if(sqlca.sqlcode!=0)
+    {
+        return sqlca.sqlcode;
+    }
+    EXEC SQL OPEN txn_cursor_TBL_TXN_NAME;
+    if(sqlca.sqlcode!=0)
+    {
+        return sqlca.sqlcode;
+    }
+    return 0;
+}
+
+int FetchCursorTBL_TXN_NAME(TBL_TXN_NAME_Def *pTBL_TXN_NAME)
+{
+    EXEC SQL FETCH txn_cursor_TBL_TXN_NAME INTO :pTBL_TXN_NAME;
+    if (sqlca.sqlcode == 1403 || sqlca.sqlcode == 100)
+        return sqlca.sqlcode;
+    if ((sqlca.sqlcode!=0) && (sqlca.sqlcode!= -1405))
+    {
+        return sqlca.sqlcode;
+    }
+        return 0;
+}
+
+int CloseCursorTBL_TXN_NAME()
+{
+    EXEC SQL CLOSE txn_cursor_TBL_TXN_NAME;
+    return sqlca.sqlcode;
+}
+

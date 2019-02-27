@@ -1,0 +1,10 @@
+create table TBL_MON_DATA_ALARM( 
+NOD_ID CHAR(4) not null, 
+EVENT_ID CHAR(4) not null, 
+ATTR_ID CHAR(4) not null, 
+CAT_TM CHAR(14) not null, 
+MON_OBJ CHAR(64) not null, 
+MON_DATA VARCHAR(20) not null, 
+ALARM_FLG CHAR(1) not null 
+); 
+create unique index IDX_MON_DATA_ALARM_UNI on TBL_MON_DATA_ALARM ( NOD_ID , EVENT_ID , ATTR_ID , CAT_TM , MON_OBJ ); 

@@ -1,0 +1,4 @@
+all:
+	make -f MonSvr.mak
+clean:
+	make -f MonSvr.mak $@

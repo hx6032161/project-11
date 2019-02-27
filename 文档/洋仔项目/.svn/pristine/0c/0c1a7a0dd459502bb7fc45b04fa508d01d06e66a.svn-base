@@ -1,0 +1,90 @@
+/*****************************************************************************/
+/*                TOPLINK+ -- Shanghai Huateng Software System Inc.          */
+/*****************************************************************************/
+/* PROGRAM NAME: DbsBankCode.sqc                                             */
+/* DESCRIPTIONS:                                                             */
+/*****************************************************************************/
+/*                             MODIFICATION LOG                              */
+/* DATE        PROGRAMMER     DESCRIPTION                                    */
+/*                                                                           */
+/*****************************************************************************/
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+#include "DbsDef.h"
+EXEC SQL BEGIN DECLARE SECTION;
+struct CST_bank_code_Def
+{
+	char	bank_code_new[5];
+	char	bank_code_old[3];
+} ltTblBankCode;
+
+EXEC SQL END DECLARE SECTION;
+
+int DbsBANKCODE( int vnOprType, struct CST_bank_code_Def *vtpTblBankCode) 
+{
+    memcpy(
+       &ltTblBankCode,
+       vtpTblBankCode,
+       sizeof(ltTblBankCode));
+    switch(vnOprType) {
+    case DBS_CURSOR:
+        EXEC SQL DECLARE
+            cur_bank_code_1
+        CURSOR FOR SELECT
+            bank_code_new,
+            bank_code_old
+        FROM 
+            cst_bank_code
+        ORDER BY
+            bank_code_new;
+        return sqlca.sqlcode;
+
+    case DBS_OPEN:
+        EXEC SQL OPEN
+            cur_bank_code_1;
+	return sqlca.sqlcode; 
+
+    case DBS_FETCH: 
+        EXEC SQL FETCH
+            cur_bank_code_1 
+        INTO
+            :ltTblBankCode.bank_code_new,
+            :ltTblBankCode.bank_code_old;
+        memcpy(
+           vtpTblBankCode,
+           &ltTblBankCode,
+           sizeof(*vtpTblBankCode));
+	return sqlca.sqlcode; 
+    
+    case DBS_CLOSE:
+        EXEC SQL CLOSE
+            cur_bank_code_1;
+	return sqlca.sqlcode; 
+
+    default:
+        return -1; 
+    } /* end of switch */
+} /* end of DbsBANKCODE */
+
+int DbsBankCodeLoad( int *pnNum, struct CST_bank_code_Def *ptBankCode)
+{
+	int i;
+	*pnNum = 0;
+
+	i = 0;
+
+	DbsBANKCODE( DBS_CURSOR, ptBankCode);
+	if(DbsBANKCODE( DBS_OPEN, ptBankCode))
+		return -1;
+
+	while(DbsBANKCODE( DBS_FETCH, ptBankCode++) == 0)
+	{
+		i++;
+	}
+
+	if(DbsBANKCODE( DBS_CLOSE, ptBankCode))
+		return -2;
+	*pnNum = i;
+	return 0;
+} /* end of DbsBankCodeLoad */

@@ -1,0 +1,12 @@
+#!/bin/csh
+
+cd $1
+
+set FILENM=`ls *`
+
+foreach i($FILENM)
+
+sed "s/FEHOME/ONLINE_HOME/g" $i > tmp.$$
+mv -f tmp.$$ $i
+
+end

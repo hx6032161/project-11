@@ -1,0 +1,136 @@
+/*
+ *  Copyright 2006, Shanghai Huateng Software Systems Co., Ltd.
+ *  All right reserved.
+ *
+ *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF SHANGHAI HUATENG
+ *  SOFTWARE SYSTEMS CO., LTD.  THE CONTENTS OF THIS FILE MAY NOT
+ *  BE DISCLOSED TO THIRD PARTIES, COPIED OR DUPLICATED IN ANY FORM,
+ *  IN WHOLE OR IN PART, WITHOUT THE PRIOR WRITTEN PERMISSION OF
+ *  SHANGHAI HUATENG SOFTWARE SYSTEMS CO., LTD.
+ *
+ *  $Id: dbusr_tbl_cups_cost_fee.pc,v 1.6 2009/02/11 01:25:56 dmliu Exp $
+ *
+ *  功能: 表tbl_cups_cost_fee基本操作函数
+ *
+ *  Edit History:
+ *
+ *    2008/12/22 -gendb
+ */
+
+#include "LogProc.h" 
+#include "DbsDef.h"
+#include "db.h"
+#include "db/TBL_CUPS_COST_FEE_DEF.h"
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+#define TABLE_NAME "TBL_CUPS_COST_FEE"
+
+EXEC SQL BEGIN DECLARE SECTION;
+struct tbl_cups_cost_fee_def {
+      char            mcc_tp  [   3];
+        char            acq_region_cd   [   5];
+        char            txn_num [   5];
+        char            cost_algo_id    [   6];
+        char            rec_opr_id      [   2];
+        char            rec_upd_opr     [  12];
+        char            rec_crt_ts      [  15];
+        char            rec_upd_ts      [  15];
+} ltTblCupsCostFee;
+EXEC SQL END DECLARE SECTION;
+
+/*************************************************************************/
+/*    input : DBS_FUNC   the dbs func                                    */
+/*                       DBS_INIT                                        */
+/*                       DBS_SELECT                                      */
+/*                       DBS_LOCK                                        */
+/*                       DBS_UPDATE                                      */
+/*                       DBS_INSERT                                      */
+/*                       DBS_DELETE                                      */
+/*                   The struct pointer defined in db.h.                 */
+/*         return : the sqlca.sqlcode                                    */
+/*************************************************************************/
+
+int DbsUsrTBL_CUPS_COST_FEE(int ifunc, tbl_cups_cost_fee_def *vtpTblCupsCostFee )
+{
+
+	memcpy(&ltTblCupsCostFee, vtpTblCupsCostFee, sizeof(ltTblCupsCostFee));
+	switch( ifunc ) {
+	case DBS_CURSOR : 
+            EXEC SQL  DECLARE cur_cups_cost_fee cursor for
+            SELECT mcc_tp ,
+                acq_region_cd ,
+                txn_num ,
+                cost_algo_id 
+           FROM tbl_cups_cost_fee
+           where mcc_tp = :ltTblCupsCostFee.mcc_tp
+           order by acq_region_cd desc, txn_num desc;
+           
+           sqlca.sqlcode = 0;
+           return  sqlca.sqlcode;
+
+	case DBS_OPEN :
+	    EXEC SQL OPEN cur_cups_cost_fee;
+            
+            if(sqlca.sqlcode == -1405)
+               sqlca.sqlcode = 0;
+            return sqlca.sqlcode;
+
+        case DBS_FETCH:
+            EXEC SQL FETCH cur_cups_cost_fee
+            INTO  :ltTblCupsCostFee.mcc_tp ,
+                  :ltTblCupsCostFee.acq_region_cd ,
+                  :ltTblCupsCostFee.txn_num,
+                  :ltTblCupsCostFee.cost_algo_id; 
+      
+            if(sqlca.sqlcode == -1405)
+               sqlca.sqlcode = 0;
+            memcpy(vtpTblCupsCostFee, &ltTblCupsCostFee, sizeof(ltTblCupsCostFee));
+            return sqlca.sqlcode;
+       
+        case DBS_CLOSE:
+            EXEC  SQL  CLOSE cur_cups_cost_fee;
+       
+            if(sqlca.sqlcode == -1405)
+               sqlca.sqlcode = 0;     
+            return sqlca.sqlcode; 
+
+        case DBS_CURSOR1 :
+            EXEC SQL  DECLARE cur_cups_cost_fee_1 cursor for
+            SELECT mcc_tp ,
+                acq_region_cd ,
+                txn_num ,
+                cost_algo_id
+           FROM tbl_cups_cost_fee
+           order by mcc_tp,acq_region_cd desc, txn_num desc;
+
+           sqlca.sqlcode = 0;
+           return  sqlca.sqlcode;
+
+        case DBS_OPEN1 :
+            EXEC SQL OPEN cur_cups_cost_fee_1;
+
+            if(sqlca.sqlcode == -1405)
+               sqlca.sqlcode = 0;
+            return sqlca.sqlcode;
+
+        case DBS_FETCH1:
+            EXEC SQL FETCH cur_cups_cost_fee_1
+            INTO  :ltTblCupsCostFee.mcc_tp ,
+                  :ltTblCupsCostFee.acq_region_cd ,
+                  :ltTblCupsCostFee.txn_num,
+                  :ltTblCupsCostFee.cost_algo_id;
+
+            if(sqlca.sqlcode == -1405)
+               sqlca.sqlcode = 0;
+            memcpy(vtpTblCupsCostFee, &ltTblCupsCostFee, sizeof(ltTblCupsCostFee));
+            return sqlca.sqlcode;
+
+        case DBS_CLOSE1:
+            EXEC  SQL  CLOSE cur_cups_cost_fee_1;
+
+            if(sqlca.sqlcode == -1405)
+               sqlca.sqlcode = 0;
+            return sqlca.sqlcode;
+	default :  return(543);
+	}
+}

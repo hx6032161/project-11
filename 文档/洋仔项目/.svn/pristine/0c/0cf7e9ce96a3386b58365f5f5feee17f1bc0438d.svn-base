@@ -1,0 +1,24 @@
+DROP TABLE TBL_BAT_MAIN_CTL CASCADE CONSTRAINTS;
+
+/*==============================================================*/
+/* Table: TBL_BAT_MAIN_CTL                                      */
+/*==============================================================*/
+CREATE TABLE TBL_BAT_MAIN_CTL  (
+   BAT_ID               CHAR(5)                         NOT NULL,
+   BAT_PROC_NAME        CHAR(16)                        NOT NULL,
+   BAT_CLS              CHAR(2)                         NOT NULL,
+   BAT_STATE            CHAR(1)                         NOT NULL,
+   RUN_PROC_QT          CHAR(2)                         NOT NULL,
+   COMMIT_QT            CHAR(8)                         NOT NULL,
+   CHD_COUNT            INTEGER                         NOT NULL,
+   TASK_ASSIGN_STATE    CHAR(1)                         NOT NULL,
+   TASK_START_FLG       CHAR(1),
+   BAT_DSP              CHAR(30),
+   BAT_NOTE             CHAR(60),
+   REC_OPR_ID           CHAR(1),
+   REC_UPD_OPR          CHAR(11),
+   REC_CRT_TS           CHAR(14),
+   REC_UPD_TS           CHAR(14),
+   CONSTRAINT PK_TBL_BAT_MAIN_CTL PRIMARY KEY (BAT_ID)
+);
+

@@ -1,0 +1,53 @@
+/****************************************************************
+ *	文 件 名: Txn615.c 
+ *	功    能: ATM发卡对帐,单向,银联发起
+ *	编程人员: 陈亮 
+ *	编程时间: 2003/04/20
+ *	备    注: 交易代码: 6153 6154 
+ * 	Copyright (c) 2005 by Huateng Co. All rights reserved.
+ *****************************************************************/
+#include "M001MngSrv.h"
+
+int Txn6153(T_IpcIntMngDef *ptIpcIntMng)
+{
+	char    sCurrentTime[15];
+	int     nReturnCode;        
+	
+	nReturnCode = MngCustVerifyMAC(ptIpcIntMng, &gatInstInfo); 
+	if (nReturnCode) 
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"MngCustVerifyMAC error, %d.", nReturnCode); 
+		return -1; 
+	}
+
+	CommonGetCurrentTime (sCurrentTime);
+	if(nReturnCode = DbsBegin())
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,
+				"DbsBegin to %s error", gsToSrvId);
+		return nReturnCode;
+	}
+
+	if(nReturnCode = DbsManagerIn(DBS_INSERT,ptIpcIntMng,sCurrentTime))
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__,
+				"DbsManagerIn to %s error", gsToSrvId);
+		return nReturnCode;         
+	}       
+
+	memcpy(ptIpcIntMng->sMsgDestId, ptIpcIntMng->sMsgSrcId, SRV_ID_LEN);
+	ptIpcIntMng->sTxnNum[3]++;
+	ptIpcIntMng->sMsgType[2]++;
+	ptIpcIntMng->sSettlmtCode[0] = '1';
+	
+	nReturnCode = MngCustGenerateMAC (ptIpcIntMng, &gatInstInfo);
+	if (nReturnCode) 
+	{
+		HtLog (gsLogFile, HT_LOG_MODE_ERROR, __FILE__,__LINE__, 
+			"MngCustGenerateMAC error, %d.", nReturnCode); 
+		return -1; 
+	}
+
+	return 0;
+}

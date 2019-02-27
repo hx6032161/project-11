@@ -1,0 +1,35 @@
+1.使用gdb调试多进程时，如果想要在进程间进行切换，那么就需要在fork调用前设置： set detach-on-fork off ，然后使用 info inferiors 来查看进程信息，得到的信息可以看到最前面有一个进程编号，使用 inferior num 来进行进程切换。
+
+那么为什么要使用 set detache-on-fork off 呢？它的意思是在调用fork后相关进程的运行行为是怎么样的，是detache on/off ?也就是说分离出去独立运行，不受gdb控制还是不分离，被阻塞住。这里还涉及到一个设置 set follow-fork-mode [parents/child] ,就是fork之后，gdb的控制落在谁身上，如果是父进程，那么分离的就是子进程，反之亦然。如果detache-on-fork被off了，那么未受控的那个进程就会被阻塞住，进程状态为T，即处于调试状态。 
+
+continue 继续执行
+
+delete breakpoints n：删除序号为n的断点
+
+break 函数名：在某个函数开头设置断点
+
+clone-inferior [-copies n] [infno]
+复制n个编号是infno的inferior。如果不指定n的话，就只复制一个inferior。如果不指定infno，则就复制正在调试的inferior。
+
+remove-inferiors infno
+删除一个infno号的inferior。如果inferior正在运行，则不能删除，所以删除前需要先kill或者detach这个inferior。
+
+
+ print */&x 打印x的内容/地址。
+
+ backtrace：显示栈信息。简写为bt。
+
+set scheduler-locking off|on|step： 
+在调式某一个线程时，其他线程是否执行。在使用step或continue命令调试当前被调试线程的时候，其他线程也是同时执行的，如果我们只想要被调试的线程执行，而其他线程停止等待，那就要锁定要调试的线程，只让他运行。
+
+
+GDB多线程调试一个重要的设置参数就是scheduler-locking，取值on、off、step，默认为step。
+show?scheduler-locking ?//显示当前scheduler-locking
+set?scheduler-locking [on/off/step] ?//设置scheduler-locking
+
+注意：set?scheduler-locking要处于线程运行环境下才能生效，也就是程序已经运行并且暂停在某个断点处，否则会出现“Target 'exec' cannot support this command.”这样的错误；而且经过测试，设置后的scheduler-locking值在整个进程内有效，不属于某个线程。
+
+下面根据实际测试结果对scheduler-locking的3种取值进行说明：
+on：只有当前调试线程运行，其他线程处于暂停状态。
+off：当前调试线程外的其他线程一直在正常运行。
+step：其他线程跟随当前调试线程运行，但具体怎么协同运行，测试中无法体现。

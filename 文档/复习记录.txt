@@ -105,3 +105,49 @@ T(n) =Ω (g(n))
 	查询共享内存 ipcs -m
 	查询所有进程间通信 ipcs -a
 	删除通信 ipcrm -m + shmid
+
+3 epoll tcp服务器实现 https://www.cnblogs.com/moonlove/archive/2012/03/17/2509150.html
+
+Getaddrinfo https://www.cnblogs.com/LubinLew/p/POSIX-getaddrinfo.html
+
+       int getaddrinfo(const char *node, /* host 或者IP地址 */const char *service, /* 十进制端口号 或者常用服务名称如"ftp"、"http"等 */const struct addrinfo *hints, /* 获取信息要求设置 */
+ struct addrinfo **res /* 获取信息结果 */
+);
+
+  struct addrinfo {
+               int              ai_flags; 指示在getaddrinfo函数中使用的选项的标志。
+               int              ai_family;
+               int              ai_socktype;
+               int              ai_protocol;
+               socklen_t        ai_addrlen;
+               struct sockaddr *ai_addr;
+               char            *ai_canonname;
+               struct addrinfo *ai_next;
+           };
+ai_family指定了地址族，可取值如下：?
+AF_INET????????? 2??????????? IPv4?
+AF_INET6??????? 23??????????? IPv6?
+AF_UNSPEC??????? 0??????????? 协议无关
+ai_socktype指定我套接字的类型?
+SOCK_STREAM??????? 1??????????? 流?
+SOCK_DGRAM??????? 2??????????? 数据报
+
+ai_protocol
+　　具体取值范围请查看?Ip?Protocol?，常用的有?IPPROTO_TCP、IPPROTO_UDP 等，设置为0表示所有协议。
+?ai_flags
+　　附加选项,多个选项可以使用或操作进行结合，具体取值范围请查看struct addrinfo
+* AI_PASSIVE
+　　　　如果设置了?AI_PASSIVE?标志,并且?nodename?是 NULL, 那么返回的socket地址可以用于的bind()函数，
+? ? ?　　返回的地址是通配符地址(wildcard address, IPv4时是INADDR_ANY,IPv6时是IN6ADDR_ANY_INIT)，
+? ? ?　　这样应用程序(典型是server)就可以使用这个通配符地址用来接收任何请求主机地址的连接，
+? ? ?　　如果?nodename?不是NULL，那么?AI_PASSIVE?标志被忽略；
+　　　　如果未设置AI_PASSIVE标志,返回的socket地址可以用于connect(), sendto(), 或者 sendmsg()函数。
+　　　　如果?nodename?是NULL，那么网络地址会被设置为lookback接口地址(IPv4时是INADDR_LOOPBACK,IPv6时是IN6ADDR_LOOPBACK_INIT)，
+　　　　这种情况下，应用是想与运行在同一个主机上另一个应用通信。
+　　疑惑：为啥要使用getaddrinfo函数
+　　
+答：简化res变量的初始化。老实讲，数据类型addrinfo还是有点小复杂的（有兴趣可以研究下），如果每一个内部数据成员都要考虑初始化，还是相对麻烦的。所以，这里引入getaddrinfo()函数，使得addrinfo res的初始化变得清晰而简单。需要补充的是，getaddrinfo()函数的用途也不只限于此的，至少它的本意是获得所有符合条件的addrinfo类型列表的。
+　　
+
+
+
